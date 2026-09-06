@@ -292,13 +292,15 @@ namespace f4mp::client
 			_remotes.SetGhost(a_on);
 		} else if (a_option == "duplicate") {
 			_remotes.SetDuplicate(a_on);
+		} else if (a_option == "move") {
+			_remotes.SetMove(a_on);
 		} else if (a_option == "respawn") {
 			_remotes.Respawn();
 		} else {
 			return false;
 		}
-		game::ConsolePrint(std::format("[F4MP] clones: sync {} pacify {} ghost {} duplicate {}",
-			_remotes.GetDrive(), _remotes.GetPacify(), _remotes.GetGhost(), _remotes.GetDuplicate()));
+		game::ConsolePrint(std::format("[F4MP] clones: sync {} pacify {} ghost {} duplicate {} move {}",
+			_remotes.GetDrive(), _remotes.GetPacify(), _remotes.GetGhost(), _remotes.GetDuplicate(), _remotes.GetMove()));
 		return true;
 	}
 
@@ -356,6 +358,10 @@ namespace f4mp::client
 				static_cast<int>(actor->weaponState), static_cast<unsigned>(actor->sneaking),
 				static_cast<unsigned>(actor->sprinting), static_cast<int>(actor->sitSleepState),
 				p.snapshots.size(), p.speed));
+			game::ConsolePrint(std::format("      graph now: SpeedSampled {:.1f} Direction {:.2f} IsRunning {} IsSprinting {} bAnimationDriven {} (we write speed {:.0f})",
+				game::ReadGraphFloat(actor, "SpeedSampled"), game::ReadGraphFloat(actor, "Direction"),
+				game::ReadGraphBool(actor, "IsRunning"), game::ReadGraphBool(actor, "IsSprinting"),
+				game::ReadGraphBool(actor, "bAnimationDriven"), p.speed));
 		}
 	}
 

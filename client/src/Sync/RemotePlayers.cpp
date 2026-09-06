@@ -272,11 +272,16 @@ namespace f4mp::client
 
 		const auto sample = Sample(a_player, a_renderMs);
 		const auto position = game::ToNi(sample.position);
-		game::DriveClone(actor, position, sample.yaw);
+		const float frameDt = a_player.hasLastRender ? std::chrono::duration<float>(a_now - a_player.lastRenderTime).count() : 0.0f;
+		if (_move && frameDt > 0.0f) {
+			game::DriveCloneByMove(actor, position, sample.yaw, std::min(frameDt, 0.1f));
+		} else {
+			game::DriveClone(actor, position, sample.yaw);
+		}
 
 		// Speed of the rendered motion, smoothed, drives the walk / run animation.
 		if (a_player.hasLastRender) {
-			const float dt = std::chrono::duration<float>(a_now - a_player.lastRenderTime).count();
+			const float dt = frameDt;
 			if (dt > 0.0f) {
 				const float dx = position.x - a_player.lastRenderPos.x;
 				const float dy = position.y - a_player.lastRenderPos.y;

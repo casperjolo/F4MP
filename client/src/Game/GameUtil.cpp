@@ -233,6 +233,42 @@ namespace f4mp::client::game
 		a_actor->Update3DPosition(true);
 	}
 
+	void DriveCloneByMove(RE::Actor* a_actor, const RE::NiPoint3& a_position, float a_yaw, float a_deltaTime)
+	{
+		if (!a_actor) {
+			return;
+		}
+		constexpr float SNAP_DISTANCE = 250.0f;
+
+		const auto current = a_actor->GetPosition();
+		const RE::NiPoint3 delta(a_position.x - current.x, a_position.y - current.y, a_position.z - current.z);
+		const float distance = std::sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z);
+		if (distance > SNAP_DISTANCE) {
+			DriveClone(a_actor, a_position, a_yaw);
+			return;
+		}
+		a_actor->SetHeading(a_yaw);
+		a_actor->Move(a_deltaTime, delta, false);
+	}
+
+	float ReadGraphFloat(RE::Actor* a_actor, const char* a_variable)
+	{
+		float value = -1.0f;
+		if (a_actor) {
+			a_actor->GetGraphVariableImplFloat(RE::BSFixedString(a_variable), value);
+		}
+		return value;
+	}
+
+	bool ReadGraphBool(RE::Actor* a_actor, const char* a_variable)
+	{
+		bool value = false;
+		if (a_actor) {
+			a_actor->GetGraphVariableImplBool(RE::BSFixedString(a_variable), value);
+		}
+		return value;
+	}
+
 	void SetLocomotion(RE::Actor* a_actor, float a_speed, bool a_sprinting, bool a_first)
 	{
 		if (!a_actor) {

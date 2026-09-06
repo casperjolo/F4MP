@@ -61,6 +61,15 @@ namespace f4mp::client::game
 	// Moves the clone to a rendered position/heading and syncs its 3D in the same frame.
 	void DriveClone(RE::Actor* a_actor, const RE::NiPoint3& a_position, float a_yaw);
 
+	// Experiment: moves the clone towards the rendered position through the engine's own
+	// Actor::Move (character controller, like animation root motion) instead of warping, so the
+	// movement controller samples a real speed. Snaps when the error is large.
+	void DriveCloneByMove(RE::Actor* a_actor, const RE::NiPoint3& a_position, float a_yaw, float a_deltaTime);
+
+	// What the animation graph currently holds (for f4mp debug).
+	[[nodiscard]] float ReadGraphFloat(RE::Actor* a_actor, const char* a_variable);
+	[[nodiscard]] bool ReadGraphBool(RE::Actor* a_actor, const char* a_variable);
+
 	// Feeds the animation graph the locomotion it would normally derive from its own movement:
 	// SpeedSampled / Direction / IsRunning / IsSprinting, with animation-driven root motion off
 	// (a_first) so clips play without displacing the actor. Names verified by FO4_Wrld.

@@ -58,11 +58,13 @@ namespace f4mp::client
 		void SetPacify(bool a_pacify);
 		void SetGhost(bool a_ghost);
 		void SetDuplicate(bool a_duplicate);
+		void SetMove(bool a_move) noexcept { _move = a_move; }
 		void Respawn();
 		[[nodiscard]] bool GetDrive() const noexcept { return _drive; }
 		[[nodiscard]] bool GetPacify() const noexcept { return _pacify; }
 		[[nodiscard]] bool GetGhost() const noexcept { return _ghost; }
 		[[nodiscard]] bool GetDuplicate() const noexcept { return _duplicate; }
+		[[nodiscard]] bool GetMove() const noexcept { return _move; }
 
 		void Add(PlayerId a_id, std::string a_name);
 		void Rename(PlayerId a_id, std::string a_name);
@@ -105,6 +107,7 @@ namespace f4mp::client
 		bool _pacify{ true };     // do-nothing package once the AI process exists
 		bool _ghost{ true };      // ghost (base flag when duplicating, per actor otherwise)
 		bool _duplicate{ false }; // per-player runtime copy of the base record (copies T-pose, see ARCHITECTURE)
+		bool _move{ false };      // experiment: Actor::Move instead of SetPosition warps
 
 		// localMs - serverMs, min-filtered so it tracks the fastest packets (transit + clock skew).
 		bool _hasOffset{ false };
