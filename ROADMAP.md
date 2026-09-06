@@ -15,7 +15,11 @@ player is a real actor, NPCs are shared, and the server is authoritative. Phases
 - [x] Address Library IDs used at load/connect resolve on 1.11.240 (clone-spawn paths not exercised yet)
 - [x] `TestSeenData` console slot takeover works
 - [ ] Unquoted multi-word `f4mp say hello there`
+- [x] Server-side bots (`bot add mirror|orbit`) for testing clones with one client (untested in-game)
 - [ ] Two clients on one server: clone spawns, follows movement, shows the remote name
+- [x] Prologue skip: new game wakes up in the Vault 111 cryo pod with the character creator
+      (console-stage sequence + Game.ShowRaceMenu / ShowSPECIALMenu; untested in-game)
+- [ ] Prologue skip: verify the pod opens, sex selection works, walking speed is restored
 
 ## Phase 1 – Players that look and act like players
 

@@ -59,11 +59,27 @@ Open the console with `~` and use the `f4mp` command:
 | `f4mp name <name>` | Change your name; applies on the next connect |
 | `f4mp help` | This list |
 
+### New game: straight to Vault 111
+
+On a new game the plugin skips the pre-war Sanctuary prologue. You wake up in your cryo pod in
+2287 and the character creator opens right there (face, then name and SPECIAL), so everyone on a
+server starts the same way. Loading a save is never touched. Turn it off or tweak the exact
+console sequence it uses under `[NewGame]` in `F4MP.ini`; everything it does is logged to
+`F4MP.log`. The vault exit elevator still offers the vanilla re-customisation as a fallback.
+
 ## Host a server
 
 1. Copy `dist/server/` anywhere and edit `server.ini` (port, name, MOTD, max players).
 2. Run `F4MPServer.exe`. Forward the UDP port for friends outside your LAN.
-3. Console: `help`, `list`, `say <text>`, `kick <id> [reason]`, `stop`.
+3. Console: `help`, `list`, `say <text>`, `kick <id> [reason]`, `bot add [mirror|orbit] [name]`,
+   `bot remove <id|all>`, `stop`.
+
+### Testing alone with bots
+
+`bot add` creates a fake player that every client renders like a real one. A *mirror* bot stands
+a few metres east of the first real player and copies their movement, sneak, weapon and death
+state; an *orbit* bot walks a circle around them, which is the quickest way to judge interpolation.
+`bot remove all` clears them. Bots show up in `list` and `f4mp list` and can be kicked by id.
 
 ## Repository layout
 

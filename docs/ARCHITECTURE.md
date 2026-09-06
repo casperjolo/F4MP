@@ -15,7 +15,8 @@
 1. `F4SEPlugin_Load` (`Main.cpp`): `F4SE::Init`, read `F4MP.ini`, register the F4SE message
    listener and a **permanent task** (`AddTaskPermanent`) that runs `Session::Tick` every frame on
    the game thread.
-2. `kPostLoadGame` / `kNewGame` → `Session::OnEnterWorld`: the player exists, autoconnect kicks in.
+2. `kPostLoadGame` → `Session::OnEnterWorld`: the player exists, autoconnect kicks in.
+   `kNewGame` → `Session::OnNewGame`: the same, plus the prologue skip is armed.
 3. `kPreLoadGame` → `Session::OnLeaveWorld`: forget actor handles (the world is going away).
 4. `kPreSaveGame` → `Session::OnPreSave`: delete clone actors so they never end up in a save.
 
@@ -23,13 +24,33 @@
 
 ```
 NetClient::Pump()                 service ENet with 0 timeout, dispatch packets
-if in world and disconnected      reconnect every 10 s
-if connected and welcomed:
-    SendState()                   sample player, send at SendRate Hz when changed (1 Hz heartbeat)
-    RemotePlayers::Update()       spawn / despawn / interpolate every remote player
+if in world:
+    PrologueSkip::Update()        new-game skip state machine (idle after it is done)
+    if disconnected               reconnect every 10 s
+    if connected and welcomed:
+        SendState()               sample player, send at SendRate Hz when changed (1 Hz heartbeat)
+        RemotePlayers::Update()   spawn / despawn / interpolate every remote player
 ```
 
 Everything is single-threaded on the game thread, so engine calls need no locking.
+
+### Prologue skip (`Game/PrologueSkip.cpp`)
+
+Armed by `kNewGame` only, so saves are never affected. Once the player has a parent cell and
+`SkipDelay` has passed, it closes the mirror character creator if it is open (`UIMessageQueue`
+hide on `LooksMenu`) and runs the `[NewGame] SkipCommands` list through
+`Script::ExecuteSingleLineConsoleCommand`. The default list is the sequence the community uses:
+stop the TV scene (`MQ101TVStation` 200), enter the pod (`MQ101` 805, fades to white), wait,
+wake in 2287 with the Kellogg scene skipped (`MQ101` 900), and drop the pre-war music.
+
+It then polls the quests: `MQ102` ("Out of Time", form `0001CC2A`) reaching stage 1, or `MQ101`
+("War Never Changes", form `0001ED86`) reaching 1000, means the player is out of the pod. At that
+point it dispatches `Game.ShowRaceMenu(player, mode, spouseFemale, spouseMale)` through the
+Papyrus VM (`GameVM::GetVMInterface()->InvokeStaticFunction`). Mode 0 is the full start-of-game
+creator with sex selection and needs the two spouse actors, which are looked up in `MQ101`'s
+aliases by name; if they are not found it falls back to mode 1 (face only). When `LooksMenu`
+closes it dispatches `Game.ShowSPECIALMenu()` for the name and SPECIAL form, unless the quest
+already opened it. Every step and the alias list are written to `F4MP.log`.
 
 ### Remote players
 
@@ -75,6 +96,16 @@ version → assign id → `Welcome` → send the existing player list (and their
 newcomer → broadcast `PlayerJoined`. `PlayerState` packets are sanity-checked (finite floats),
 stored and relayed to everyone else immediately on the unreliable channel. Chat is length-capped
 and flood-limited per player (see [PROTOCOL.md](PROTOCOL.md)).
+
+### Bots
+
+`bot add [mirror|orbit] [name]` creates a `Bot` record with an id from the same counter as real
+players. It is announced with `PlayerJoined` like anyone else, listed to newcomers in the hello
+handshake, and removed with `PlayerLeft`. After every `Service()` pass, `UpdateBots()` derives each
+bot's state from the first real player that has sent one (re-attaching if that player leaves):
+*mirror* copies the state with a +200 unit X offset, *orbit* walks a 250 unit circle at 0.6 rad/s
+facing the direction of travel. States go out at 20 Hz on the unreliable channel to every client,
+including the followed player, so a single client can watch a clone being driven.
 
 ## Networking
 

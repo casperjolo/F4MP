@@ -43,6 +43,15 @@ namespace f4mp::client
 		_config = std::move(a_config);
 		_remotes.SetInterpDelay(_config.interpDelayMs);
 
+		PrologueSkip::Settings skip;
+		skip.enabled = _config.skipPrologue;
+		skip.startDelay = _config.skipDelay;
+		skip.podTimeout = _config.podTimeout;
+		skip.commands = _config.skipCommands;
+		skip.chargen = _config.chargen;
+		skip.chargenMode = _config.chargenMode;
+		_skip.Configure(std::move(skip));
+
 		_net.onConnected = [this]() {
 			HelloMsg hello;
 			hello.gameVersion = F4SE::GetRuntimeVersion().Pack<std::uint32_t>();
@@ -84,10 +93,17 @@ namespace f4mp::client
 		_remotes.ForgetActors();
 	}
 
+	void Session::OnNewGame()
+	{
+		OnEnterWorld();
+		_skip.OnNewGame();
+	}
+
 	void Session::OnLeaveWorld()
 	{
 		REX::LogInformation("Leaving world"sv);
 		_inWorld = false;
+		_skip.OnLeaveWorld();
 		_remotes.ForgetActors();
 	}
 
@@ -106,6 +122,8 @@ namespace f4mp::client
 		if (!_inWorld) {
 			return;
 		}
+
+		_skip.Update();
 
 		if (_net.GetState() == NetClient::State::kDisconnected && _config.autoConnect && !_manualDisconnect) {
 			const auto now = std::chrono::steady_clock::now();

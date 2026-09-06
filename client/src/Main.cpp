@@ -16,8 +16,10 @@ namespace
 			session.OnGameDataReady();
 			break;
 		case MessageType::kPostLoadGame:
-		case MessageType::kNewGame:
 			session.OnEnterWorld();
+			break;
+		case MessageType::kNewGame:
+			session.OnNewGame();
 			break;
 		case MessageType::kPreLoadGame:
 			session.OnLeaveWorld();

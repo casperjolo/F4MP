@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Config.hpp"
+#include "Game/PrologueSkip.hpp"
 #include "Net/NetClient.hpp"
 #include "Sync/LocalPlayer.hpp"
 #include "Sync/RemotePlayers.hpp"
@@ -18,7 +19,8 @@ namespace f4mp::client
 
 		// F4SE lifecycle
 		void OnGameDataReady();
-		void OnEnterWorld(); // save loaded / new game started
+		void OnEnterWorld(); // save loaded
+		void OnNewGame();    // new game started (also enters the world)
 		void OnLeaveWorld(); // about to load a save
 		void OnPreSave();
 
@@ -52,6 +54,7 @@ namespace f4mp::client
 		NetClient _net;
 		LocalPlayer _local;
 		RemotePlayers _remotes;
+		PrologueSkip _skip;
 
 		PlayerId _myId{ INVALID_PLAYER_ID };
 		std::string _serverName;
