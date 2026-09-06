@@ -290,22 +290,24 @@ namespace f4mp::client
 			_remotes.SetPacify(a_on);
 		} else if (a_option == "ghost") {
 			_remotes.SetGhost(a_on);
+		} else if (a_option == "duplicate") {
+			_remotes.SetDuplicate(a_on);
 		} else if (a_option == "respawn") {
 			_remotes.Respawn();
 		} else {
 			return false;
 		}
-		game::ConsolePrint(std::format("[F4MP] clones: sync {} pacify {} ghost {}",
-			_remotes.GetDrive(), _remotes.GetPacify(), _remotes.GetGhost()));
+		game::ConsolePrint(std::format("[F4MP] clones: sync {} pacify {} ghost {} duplicate {}",
+			_remotes.GetDrive(), _remotes.GetPacify(), _remotes.GetGhost(), _remotes.GetDuplicate()));
 		return true;
 	}
 
 	void Session::PrintDebug() const
 	{
 		auto* local = game::GetPlayer();
-		game::ConsolePrint(std::format("[F4MP] clone base 0x{:08X}, {} remote(s), interp {} ms, sync {} pacify {} ghost {}",
+		game::ConsolePrint(std::format("[F4MP] clone base 0x{:08X}, {} remote(s), interp {} ms, sync {} pacify {} ghost {} duplicate {}",
 			_remotes.GetCloneBase(), _remotes.Count(), _config.interpDelayMs,
-			_remotes.GetDrive(), _remotes.GetPacify(), _remotes.GetGhost()));
+			_remotes.GetDrive(), _remotes.GetPacify(), _remotes.GetGhost(), _remotes.GetDuplicate()));
 
 		if (local) {
 			auto* base = local->GetActorBase();

@@ -159,6 +159,18 @@ namespace f4mp::client::game
 		return handler->CreateReferenceAtLocation(data);
 	}
 
+	void ApplyCloneIdentity(RE::TESObjectREFR* a_ref, const std::string& a_name, bool a_ghost)
+	{
+		if (!a_ref) {
+			return;
+		}
+		a_ref->SetDisplayName(RE::BGSLocalizedString(a_name.c_str()));
+		if (a_ghost) {
+			// Per-reference ghost through the stock console command, targeted at this actor.
+			RE::Script::ExecuteSingleLineConsoleCommand("SetGhost 1", a_ref, true);
+		}
+	}
+
 	bool PacifyClone(RE::Actor* a_actor)
 	{
 		if (!a_actor || !a_actor->currentProcess) {

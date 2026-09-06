@@ -44,14 +44,16 @@ namespace f4mp::client
 		void SetCloneBase(RE::TESFormID a_formId);
 		[[nodiscard]] RE::TESFormID GetCloneBase() const noexcept { return _baseFormId; }
 
-		// Experiment switches (f4mp sync / pacify / ghost). Pacify and ghost respawn the clones.
+		// Experiment switches (f4mp sync / pacify / ghost / duplicate). All but sync respawn the clones.
 		void SetDrive(bool a_drive) noexcept { _drive = a_drive; }
 		void SetPacify(bool a_pacify);
 		void SetGhost(bool a_ghost);
+		void SetDuplicate(bool a_duplicate);
 		void Respawn();
 		[[nodiscard]] bool GetDrive() const noexcept { return _drive; }
 		[[nodiscard]] bool GetPacify() const noexcept { return _pacify; }
 		[[nodiscard]] bool GetGhost() const noexcept { return _ghost; }
+		[[nodiscard]] bool GetDuplicate() const noexcept { return _duplicate; }
 
 		void Add(PlayerId a_id, std::string a_name);
 		void Rename(PlayerId a_id, std::string a_name);
@@ -82,8 +84,9 @@ namespace f4mp::client
 		std::unordered_map<PlayerId, RemotePlayer> _players;
 		float _interpDelayMs{ 100.0f };
 		RE::TESFormID _baseFormId{ game::PLAYER_BASE_FORM_ID };
-		bool _drive{ true };  // write position / heading / flags every frame
-		bool _pacify{ true }; // do-nothing package once the AI process exists
-		bool _ghost{ true };  // ghost flag on the clone base
+		bool _drive{ true };      // write position / heading / flags every frame
+		bool _pacify{ true };     // do-nothing package once the AI process exists
+		bool _ghost{ true };      // ghost (base flag when duplicating, per actor otherwise)
+		bool _duplicate{ false }; // per-player runtime copy of the base record (copies T-pose, see ARCHITECTURE)
 	};
 }

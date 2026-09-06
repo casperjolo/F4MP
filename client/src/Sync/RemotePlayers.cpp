@@ -46,6 +46,9 @@ namespace f4mp::client
 		}
 		it->second.name = std::move(a_name);
 		game::RenameCloneBase(it->second.base, it->second.name);
+		if (auto ref = it->second.actor.get()) {
+			game::ApplyCloneIdentity(ref.get(), it->second.name, false);
+		}
 		REX::LogInformation("Remote player #{} renamed to \"{}\""sv, a_id, it->second.name);
 	}
 
@@ -119,20 +122,33 @@ namespace f4mp::client
 			}
 			a_player.lastSpawnAttempt = a_now;
 
-			if (!a_player.base && !a_player.baseFailed) {
-				a_player.base = game::CreateCloneBase(_baseFormId, a_player.name, _ghost);
-				a_player.baseFailed = a_player.base == nullptr;
+			RE::TESNPC* base = nullptr;
+			if (_duplicate) {
+				if (!a_player.base && !a_player.baseFailed) {
+					a_player.base = game::CreateCloneBase(_baseFormId, a_player.name, _ghost);
+					a_player.baseFailed = a_player.base == nullptr;
+				}
+				base = a_player.base;
+			} else {
+				base = RE::TESForm::FindFormByID<RE::TESNPC>(_baseFormId);
+				if (!base && !a_player.baseFailed) {
+					REX::LogError("Clone base NPC 0x{:08X} does not exist"sv, _baseFormId);
+					a_player.baseFailed = true;
+				}
 			}
-			if (!a_player.base) {
+			if (!base) {
 				return;
 			}
 
-			a_player.actor = game::SpawnPlayerClone(a_player.base, game::ToNi(a_player.next.state.position), a_player.next.state.yaw, targetSpace);
+			a_player.actor = game::SpawnPlayerClone(base, game::ToNi(a_player.next.state.position), a_player.next.state.yaw, targetSpace);
 			ref = a_player.actor.get();
 			actor = ref ? ref->As<RE::Actor>() : nullptr;
 			if (!actor) {
 				REX::LogWarning("Failed to spawn actor for #{} \"{}\""sv, a_player.id, a_player.name);
 				return;
+			}
+			if (!_duplicate) {
+				game::ApplyCloneIdentity(ref.get(), a_player.name, _ghost);
 			}
 
 			a_player.actorSpace = targetSpace;
@@ -217,7 +233,7 @@ namespace f4mp::client
 			player.appliedFlags = kStateNone;
 			player.lastSpawnAttempt = {};
 		}
-		REX::LogInformation("Clones respawn (base 0x{:08X}, drive {}, pacify {}, ghost {})"sv, _baseFormId, _drive, _pacify, _ghost);
+		REX::LogInformation("Clones respawn (base 0x{:08X}, drive {}, pacify {}, ghost {}, duplicate {})"sv, _baseFormId, _drive, _pacify, _ghost, _duplicate);
 	}
 
 	void RemotePlayers::SetCloneBase(RE::TESFormID a_formId)
@@ -235,6 +251,12 @@ namespace f4mp::client
 	void RemotePlayers::SetGhost(bool a_ghost)
 	{
 		_ghost = a_ghost;
+		Respawn();
+	}
+
+	void RemotePlayers::SetDuplicate(bool a_duplicate)
+	{
+		_duplicate = a_duplicate;
 		Respawn();
 	}
 

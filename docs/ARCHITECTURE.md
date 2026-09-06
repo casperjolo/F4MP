@@ -71,16 +71,25 @@ to everyone, and clients rename the clone's base NPC.
 
 ### Remote players
 
-Each remote player gets its own **runtime copy of the player base NPC** (form `0x00000007`,
-duplicated with `TESForm::CreateDuplicateForm`). The copy carries the remote player's name (so it
-shows on the crosshair), is flagged *ghost* (combat AI ignores it, it takes no damage), loses
-*unique/essential/protected*, and has aggression and assistance set to none. An actor of that
-base is placed with `TESDataHandler::CreateReferenceAtLocation` only while the remote player is
-in the same worldspace (exterior) or the same cell (interior) as the local player, and is
-despawned when either of them moves elsewhere. Once the actor's AI process exists it is given
-the *do nothing* package and taken out of combat, so no package ever fights the network. Placed
-actors start at alpha 0 and rely on the engine's fade-in, which never runs for such a clone, so
-its alpha is forced to 1 every frame (found with `f4mp debug`: 3D loaded, node visible, alpha 0).
+Each remote player is an actor placed **straight from the player base NPC record** (form
+`0x00000007`, configurable as `[Sync] CloneBase`) with `TESDataHandler::CreateReferenceAtLocation`,
+the same call Papyrus `PlaceAtMe` makes, with the engine's own `NEW_REFR_DATA` vtable. The remote
+player's name goes on the reference as a display name (what the crosshair shows) and ghost is
+applied per actor (`SetGhost 1` targeted at it), so nothing on the shared record changes.
+
+A per-player *runtime copy* of the record (`TESForm::CreateDuplicateForm`, `f4mp duplicate on`)
+is kept as an option because appearance sync will want per-player records, but actors spawned
+from such a copy stand in a T-pose: their animation graph never runs, while a vanilla
+`placeatme 7` animates. Whatever the copy lacks (most likely the keywords that select the
+animation subgraphs) has to be fixed before that path is usable.
+
+The actor exists only while the remote player is in the same worldspace (exterior) or the same
+cell (interior) as the local player, and is despawned when either of them moves elsewhere. Once
+its AI process exists it is given the *do nothing* package and taken out of combat, so no package
+ever fights the network. Placed actors start at alpha 0 and rely on the engine's fade-in, which
+never runs for such a clone, so its alpha is forced to 1 (found with `f4mp debug`: 3D loaded,
+node visible, alpha 0). `f4mp sync|pacify|ghost|duplicate on|off` toggle each behaviour at
+runtime for experiments.
 
 Dynamic forms do not survive loading a save, so `ForgetActors()` drops both actor handles and
 base-form pointers on `kPreLoadGame` / `kPostLoadGame`; they are recreated on demand.

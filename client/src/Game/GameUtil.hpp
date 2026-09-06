@@ -47,6 +47,10 @@ namespace f4mp::client::game
 	// Spawns a clone of a_base at the given spot. Returns an empty handle on failure.
 	[[nodiscard]] RE::ObjectRefHandle SpawnPlayerClone(RE::TESNPC* a_base, const RE::NiPoint3& a_position, float a_yaw, const Space& a_space);
 
+	// For clones spawned straight from a shared NPC record: the remote name goes on the reference
+	// (display name, shown on the crosshair) and ghost is applied per actor.
+	void ApplyCloneIdentity(RE::TESObjectREFR* a_ref, const std::string& a_name, bool a_ghost);
+
 	// Takes a freshly spawned clone off the AI: "do nothing" package, no combat. Needs the
 	// actor's AI process to exist; returns false so the caller retries next frame.
 	bool PacifyClone(RE::Actor* a_actor);
