@@ -321,12 +321,14 @@ namespace f4mp::client
 				id, p.name, actor->GetFormID(), base ? base->GetFormID() : 0u,
 				actor->Is3DLoaded(), node != nullptr, node ? node->flags.underlying() : 0ull,
 				actor->GetAlpha(), actor->GetGhost(), actor->IsDisabled(), actor->IsDead(true), p.actorPacified));
-			game::ConsolePrint(std::format("      pos ({:.0f}, {:.0f}, {:.0f}) dist {:.0f} cell 0x{:08X} heads {} skin 0x{:08X} sex {} flags 0x{:X}",
+			game::ConsolePrint(std::format("      pos ({:.0f}, {:.0f}, {:.0f}) dist {:.0f} cell 0x{:08X} heads {} skin 0x{:08X} sex {} flags 0x{:X} process {} niFlags 0x{:X}",
 				pos.x, pos.y, pos.z, dist, cell ? cell->GetFormID() : 0u,
 				base ? base->GetHeadParts().size() : 0u,
 				base && base->formSkin ? base->formSkin->GetFormID() : 0u,
 				base ? static_cast<int>(base->GetSex()) : -1,
-				static_cast<std::uint32_t>(actor->GetFormFlags())));
+				static_cast<std::uint32_t>(actor->GetFormFlags()),
+				actor->currentProcess ? static_cast<int>(actor->currentProcess->processLevel) : -1,
+				actor->niFlags.underlying()));
 		}
 	}
 

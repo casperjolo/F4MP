@@ -6,14 +6,14 @@ namespace f4mp::client::game
 {
 	namespace
 	{
-		// NEW_REFR_DATA carries a vtable in the engine; giving the derived type a real
-		// vtable with a no-op HandlePre3D keeps the engine happy when it calls it.
-		class CloneRefrData final
-			: public RE::NEW_REFR_DATA
+		// NEW_REFR_DATA is declared novtable; give the instance the engine's own vtable so the
+		// engine's HandlePre3D (whatever setup it does for the new reference) runs, exactly as it
+		// does for a Papyrus PlaceAtMe. An earlier no-op override left actors in a T-pose.
+		void EmplaceEngineVTable(RE::NEW_REFR_DATA& a_data)
 		{
-		public:
-			void HandlePre3D(RE::TESObjectREFR*) override {}
-		};
+			static const REL::Relocation<std::uintptr_t> VTBL{ RE::VTABLE::NEW_REFR_DATA[0] };
+			*reinterpret_cast<std::uintptr_t*>(std::addressof(a_data)) = VTBL.get();
+		}
 	}
 
 	RE::PlayerCharacter* GetPlayer()
@@ -146,7 +146,8 @@ namespace f4mp::client::game
 			return {};
 		}
 
-		CloneRefrData data;
+		RE::NEW_REFR_DATA data;
+		EmplaceEngineVTable(data);
 		data.location = a_position;
 		data.direction = RE::NiPoint3(0.0f, 0.0f, a_yaw);
 		data.object = a_base;
