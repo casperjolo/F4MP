@@ -78,7 +78,9 @@ shows on the crosshair), is flagged *ghost* (combat AI ignores it, it takes no d
 base is placed with `TESDataHandler::CreateReferenceAtLocation` only while the remote player is
 in the same worldspace (exterior) or the same cell (interior) as the local player, and is
 despawned when either of them moves elsewhere. Once the actor's AI process exists it is given
-the *do nothing* package and taken out of combat, so no package ever fights the network.
+the *do nothing* package and taken out of combat, so no package ever fights the network. Placed
+actors start at alpha 0 and rely on the engine's fade-in, which never runs for such a clone, so
+its alpha is forced to 1 every frame (found with `f4mp debug`: 3D loaded, node visible, alpha 0).
 
 Dynamic forms do not survive loading a save, so `ForgetActors()` drops both actor handles and
 base-form pointers on `kPreLoadGame` / `kPostLoadGame`; they are recreated on demand.
@@ -91,10 +93,11 @@ sneaking, weapon drawn and sprinting are pushed through `Actor::SetSneaking`,
 ### Console command
 
 `Game/ConsoleCommands.cpp` takes over the table entry of the stock debug command `TestSeenData`
-(`SCRIPT_FUNCTION::GetConsoleFunctionByName`) and renames it `f4mp`. The entry keeps one optional
-string parameter so the script compiler accepts a sub-command, but the handler ignores the compiled
-parameters and re-parses the raw line from `Script::GetText()`; that is what lets
-`f4mp say hello there` work without quotes.
+(`SCRIPT_FUNCTION::GetConsoleFunctionByName`) and renames it `f4mp`. The script compiler rejects
+any token beyond the declared parameters ("Expected end of line"), so the entry declares 24
+optional string parameters; the handler ignores the compiled values and re-parses the raw line from
+`Script::GetText()`, which is what lets `f4mp say hello there` work without quotes (longer
+messages can be quoted as one token).
 
 ### Versioning
 

@@ -147,6 +147,12 @@ namespace f4mp::client
 			a_player.actorPacified = game::PacifyClone(actor);
 		}
 
+		// Placed actors start fully transparent and rely on the engine's fade-in, which never
+		// runs for a clone that is pacified and warped every frame. Keep it opaque.
+		if (actor->GetAlpha() < 1.0f) {
+			actor->SetAlpha(1.0f);
+		}
+
 		// Render the remote player slightly in the past so there is always a snapshot to move towards.
 		const auto delay = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
 			std::chrono::duration<float, std::milli>(_interpDelayMs));

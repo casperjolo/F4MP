@@ -18,12 +18,21 @@ namespace f4mp::client::console
 		constexpr auto COMMAND_SHORT = "f4mp";
 		constexpr auto COMMAND_HELP = "F4MP multiplayer. Usage: f4mp help | status | connect [host[:port]] | disconnect | say <text> | list | name <name> | unstick";
 
-		// One optional string parameter keeps the script compiler happy with "f4mp status".
-		// The real argument line is read back from the script text so that
-		// "f4mp say hello there" works without quotes.
-		RE::SCRIPT_PARAMETER PARAMETERS[] = {
-			{ .paramName = "Subcommand", .paramType = RE::SCRIPT_PARAM_TYPE::kChar, .optional = true },
-		};
+		// The script compiler rejects tokens beyond the declared parameters ("Expected end of
+		// line"), so declare plenty of optional string parameters. The handler ignores the
+		// compiled values and re-parses the raw line, so "f4mp say hello there" works without
+		// quotes up to MAX_WORDS words; longer messages can be quoted as one token.
+		constexpr std::size_t MAX_WORDS = 24;
+		RE::SCRIPT_PARAMETER PARAMETERS[MAX_WORDS] = {};
+
+		void InitParameters()
+		{
+			for (auto& param : PARAMETERS) {
+				param.paramName = "Word";
+				param.paramType = RE::SCRIPT_PARAM_TYPE::kChar;
+				param.optional = true;
+			}
+		}
 
 		bool IsSpace(char a_c) noexcept
 		{
@@ -87,7 +96,7 @@ namespace f4mp::client::console
 			game::ConsolePrint("  f4mp status                  connection state");
 			game::ConsolePrint("  f4mp connect [host[:port]]   connect, optionally to another server");
 			game::ConsolePrint("  f4mp disconnect              leave the server (no auto-reconnect)");
-			game::ConsolePrint("  f4mp say <text>              chat");
+			game::ConsolePrint("  f4mp say <text>              chat (quote very long messages: f4mp say \"...\")");
 			game::ConsolePrint("  f4mp list                    players on the server");
 			game::ConsolePrint("  f4mp name <name>             change your name");
 			game::ConsolePrint("  f4mp unstick                 restore controls, HUD and camera after a menu froze you");
@@ -119,6 +128,7 @@ namespace f4mp::client::console
 			return false;
 		}
 
+		InitParameters();
 		function->functionName = COMMAND_NAME;
 		function->shortName = COMMAND_SHORT;
 		function->helpString = COMMAND_HELP;
