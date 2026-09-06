@@ -2,12 +2,14 @@
 
 #include "Game/GameUtil.hpp"
 
+#include <deque>
+
 namespace f4mp::client
 {
 	struct Snapshot
 	{
 		PlayerState state{};
-		std::chrono::steady_clock::time_point time{};
+		std::uint32_t serverMs{ 0 }; // server clock when the server relayed it
 	};
 
 	struct RemotePlayer
@@ -15,12 +17,10 @@ namespace f4mp::client
 		PlayerId id{ INVALID_PLAYER_ID };
 		std::string name;
 
-		bool hasState{ false };
-		Snapshot prev{};
-		Snapshot next{};
+		std::deque<Snapshot> snapshots; // oldest first, bounded
 
-		// Per-player copy of the player NPC (named, ghost, unaggressive). Dynamic form: it dies
-		// with the loaded game, see ForgetActors().
+		// Per-player copy of the player NPC (only with the duplicate experiment). Dynamic form:
+		// it dies with the loaded game, see ForgetActors().
 		RE::TESNPC* base{ nullptr };
 		bool baseFailed{ false };
 
@@ -28,9 +28,18 @@ namespace f4mp::client
 		game::Space actorSpace{};
 		bool actorDead{ false };
 		bool actorPacified{ false };
+		bool locomotionInit{ false };
 		std::uint8_t appliedFlags{ kStateNone };
 		std::chrono::steady_clock::time_point lastSpawnAttempt{};
 
+		// Locomotion derived from the rendered motion.
+		bool hasLastRender{ false };
+		RE::NiPoint3 lastRenderPos{};
+		std::chrono::steady_clock::time_point lastRenderTime{};
+		float speed{ 0.0f }; // smoothed, units/s
+
+		[[nodiscard]] bool HasState() const noexcept { return !snapshots.empty(); }
+		[[nodiscard]] const PlayerState& Latest() const { return snapshots.back().state; }
 		[[nodiscard]] bool IsSpawned() const { return actor.get() != nullptr; }
 	};
 
@@ -58,9 +67,9 @@ namespace f4mp::client
 		void Add(PlayerId a_id, std::string a_name);
 		void Rename(PlayerId a_id, std::string a_name);
 		void Remove(PlayerId a_id);
-		void ApplyState(PlayerId a_id, const PlayerState& a_state);
+		void ApplyState(PlayerId a_id, const PlayerState& a_state, std::uint32_t a_serverMs);
 
-		// Spawns / moves / despawns actors to match the latest snapshots. Call once per frame.
+		// Spawns / moves / despawns actors to match the snapshots. Call once per frame.
 		void Update();
 
 		// Deletes every spawned actor but keeps the player list (used before saving).
@@ -77,9 +86,17 @@ namespace f4mp::client
 		[[nodiscard]] std::string NameOf(PlayerId a_id) const;
 		[[nodiscard]] std::size_t Count() const noexcept { return _players.size(); }
 		[[nodiscard]] const std::unordered_map<PlayerId, RemotePlayer>& All() const noexcept { return _players; }
+		[[nodiscard]] double GetClockOffsetMs() const noexcept { return _offsetMs; }
 
 	private:
-		void UpdateOne(RemotePlayer& a_player, const game::Space& a_localSpace, std::chrono::steady_clock::time_point a_now);
+		using Clock = std::chrono::steady_clock;
+
+		void UpdateOne(RemotePlayer& a_player, const game::Space& a_localSpace, Clock::time_point a_now, double a_renderMs);
+		// Position / yaw / flags of a_player at server time a_renderMs (interpolated, lightly extrapolated).
+		static PlayerState Sample(const RemotePlayer& a_player, double a_renderMs);
+
+		[[nodiscard]] static double LocalMs() noexcept;
+		void NoteServerTime(std::uint32_t a_serverMs);
 
 		std::unordered_map<PlayerId, RemotePlayer> _players;
 		float _interpDelayMs{ 100.0f };
@@ -88,5 +105,9 @@ namespace f4mp::client
 		bool _pacify{ true };     // do-nothing package once the AI process exists
 		bool _ghost{ true };      // ghost (base flag when duplicating, per actor otherwise)
 		bool _duplicate{ false }; // per-player runtime copy of the base record (copies T-pose, see ARCHITECTURE)
+
+		// localMs - serverMs, min-filtered so it tracks the fastest packets (transit + clock skew).
+		bool _hasOffset{ false };
+		double _offsetMs{ 0.0 };
 	};
 }

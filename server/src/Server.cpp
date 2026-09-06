@@ -248,13 +248,13 @@ namespace f4mp::server
 			}
 			Send(a_player.peer, Channel::kReliable, Encode(PlayerJoinedMsg{ other->id, other->name }));
 			if (other->hasState) {
-				Send(a_player.peer, Channel::kReliable, Encode(PlayerStateUpdateMsg{ other->id, other->state }));
+				Send(a_player.peer, Channel::kReliable, Encode(PlayerStateUpdateMsg{ other->id, NowMs(), other->state }));
 			}
 		}
 		for (const auto& bot : _bots) {
 			Send(a_player.peer, Channel::kReliable, Encode(PlayerJoinedMsg{ bot.id, bot.name }));
 			if (bot.hasState) {
-				Send(a_player.peer, Channel::kReliable, Encode(PlayerStateUpdateMsg{ bot.id, bot.state }));
+				Send(a_player.peer, Channel::kReliable, Encode(PlayerStateUpdateMsg{ bot.id, NowMs(), bot.state }));
 			}
 		}
 
@@ -272,8 +272,8 @@ namespace f4mp::server
 		a_player.state = msg.state;
 		a_player.hasState = true;
 
-		// Relay straight away; clients interpolate between updates.
-		Broadcast(Channel::kUnreliable, Encode(PlayerStateUpdateMsg{ a_player.id, a_player.state }), &a_player);
+		// Relay straight away; clients interpolate between updates on the server time stamp.
+		Broadcast(Channel::kUnreliable, Encode(PlayerStateUpdateMsg{ a_player.id, NowMs(), a_player.state }), &a_player);
 	}
 
 	void Server::HandleChat(Player& a_player, Reader& a_reader)
@@ -464,8 +464,14 @@ namespace f4mp::server
 
 			bot.state = s;
 			bot.hasState = true;
-			Broadcast(Channel::kUnreliable, Encode(PlayerStateUpdateMsg{ bot.id, bot.state }));
+			Broadcast(Channel::kUnreliable, Encode(PlayerStateUpdateMsg{ bot.id, NowMs(), bot.state }));
 		}
+	}
+
+	std::uint32_t Server::NowMs() const
+	{
+		return static_cast<std::uint32_t>(
+			std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - _startTime).count());
 	}
 
 	// ---- console --------------------------------------------------------------

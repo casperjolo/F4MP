@@ -1,4 +1,4 @@
-# Wire protocol (v2)
+# Wire protocol (v3)
 
 Transport: ENet, two channels (`0` reliable, `1` unreliable sequenced). Every packet starts with
 a one-byte message id followed by the payload. All integers are little-endian; `str` is
@@ -34,7 +34,7 @@ PlayerState Vec3 position
 | 65 | Reject | reliable | `str reason` (connection is closed afterwards) |
 | 66 | PlayerJoined | reliable | `u32 id`, `str name` |
 | 67 | PlayerLeft | reliable | `u32 id` |
-| 68 | PlayerStateUpdate | unreliable (reliable when replaying to a newcomer) | `u32 id`, `PlayerState` |
+| 68 | PlayerStateUpdate | unreliable (reliable when replaying to a newcomer) | `u32 id`, `u32 serverTimeMs` (server clock at relay, wraps), `PlayerState` |
 | 69 | ChatBroadcast | reliable | `u32 fromId` (0 = server), `str text` |
 | 70 | PlayerRenamed | reliable | `u32 id`, `str name` (sent to everyone, including the renamed player) |
 
@@ -52,6 +52,14 @@ client                         server
 ```
 
 Any message other than `Hello` before the handshake completes gets the sender kicked.
+
+## Timing
+
+Every `PlayerStateUpdate` carries the server's millisecond clock at relay time. Clients keep a
+snapshot buffer per player, estimate `localMs - serverMs` with a min filter (fastest packet
+wins, slow upward drift for clock skew) and render each player at
+`serverNow - InterpDelayMs` by interpolating between the two snapshots bracketing that time,
+extrapolating at most 150 ms past the newest one.
 
 ## Server-side policy (not part of the layout)
 

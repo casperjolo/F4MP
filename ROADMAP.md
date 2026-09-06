@@ -15,7 +15,9 @@ player is a real actor, NPCs are shared, and the server is authoritative. Phases
 - [x] Address Library IDs used at load/connect resolve on 1.11.240 (clone-spawn paths not exercised yet)
 - [x] `TestSeenData` console slot takeover works
 - [x] Unquoted multi-word `f4mp say hello there` (24 optional console parameters; longer lines quoted)
-- [x] Server-side bots (`bot add mirror|orbit`) for testing clones with one client (untested in-game)
+- [x] Server-side bots (`bot add mirror|orbit`) for testing clones with one client (verified)
+- [x] Clones spawn, render and animate: PlaceAtMe-equivalent placement with the still-loading mark cleared (verified)
+- [x] Timestamped interpolation (server clock in state updates) and locomotion graph drive for walking clones (untested)
 - [ ] Two clients on one server: clone spawns, follows movement, shows the remote name
 - [x] Prologue skip: new game wakes up in the Vault 111 cryo pod with the character creator
       (verified 2026-09-06: male/female in the bathroom, `setstage MQ101 900`, face + SPECIAL at

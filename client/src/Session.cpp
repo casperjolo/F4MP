@@ -305,8 +305,8 @@ namespace f4mp::client
 	void Session::PrintDebug() const
 	{
 		auto* local = game::GetPlayer();
-		game::ConsolePrint(std::format("[F4MP] clone base 0x{:08X}, {} remote(s), interp {} ms, sync {} pacify {} ghost {} duplicate {}",
-			_remotes.GetCloneBase(), _remotes.Count(), _config.interpDelayMs,
+		game::ConsolePrint(std::format("[F4MP] clone base 0x{:08X}, {} remote(s), interp {} ms, clock offset {:.0f} ms, sync {} pacify {} ghost {} duplicate {}",
+			_remotes.GetCloneBase(), _remotes.Count(), _config.interpDelayMs, _remotes.GetClockOffsetMs(),
 			_remotes.GetDrive(), _remotes.GetPacify(), _remotes.GetGhost(), _remotes.GetDuplicate()));
 
 		if (local) {
@@ -323,8 +323,8 @@ namespace f4mp::client
 			auto ref = p.actor.get();
 			auto* actor = ref ? ref->As<RE::Actor>() : nullptr;
 			if (!actor) {
-				game::ConsolePrint(std::format("  #{} {}: state {} base {} baseFailed {} actor none",
-					id, p.name, p.hasState, p.base ? std::format("0x{:08X}", p.base->GetFormID()) : "none", p.baseFailed));
+				game::ConsolePrint(std::format("  #{} {}: snapshots {} base {} baseFailed {} actor none",
+					id, p.name, p.snapshots.size(), p.base ? std::format("0x{:08X}", p.base->GetFormID()) : "none", p.baseFailed));
 				continue;
 			}
 
@@ -351,10 +351,11 @@ namespace f4mp::client
 				static_cast<std::uint32_t>(actor->GetFormFlags()),
 				actor->currentProcess ? static_cast<int>(actor->currentProcess->processLevel) : -1,
 				actor->niFlags.underlying()));
-			game::ConsolePrint(std::format("      inGameFlags 0x{:X} lifeState {} weaponState {} sneaking {} sprinting {} sitSleep {}",
+			game::ConsolePrint(std::format("      inGameFlags 0x{:X} lifeState {} weaponState {} sneaking {} sprinting {} sitSleep {} snapshots {} speed {:.0f} u/s",
 				actor->inGameFormFlags.underlying(), static_cast<int>(actor->lifeState),
 				static_cast<int>(actor->weaponState), static_cast<unsigned>(actor->sneaking),
-				static_cast<unsigned>(actor->sprinting), static_cast<int>(actor->sitSleepState)));
+				static_cast<unsigned>(actor->sprinting), static_cast<int>(actor->sitSleepState),
+				p.snapshots.size(), p.speed));
 		}
 	}
 
@@ -401,7 +402,7 @@ namespace f4mp::client
 		                   (_config.playerName.empty() ? game::GetPlayerName() : _config.playerName) + " (you)");
 		for (const auto& [id, player] : _remotes.All()) {
 			std::string where = "no position yet";
-			if (player.hasState) {
+			if (player.HasState()) {
 				where = player.IsSpawned() ? "in view" : "elsewhere";
 			}
 			game::ConsolePrint("  #" + std::to_string(id) + " " + player.name + " (" + where + ")");
@@ -479,7 +480,7 @@ namespace f4mp::client
 		case MsgId::kPlayerStateUpdate: {
 			PlayerStateUpdateMsg msg;
 			if (msg.Read(reader) && msg.id != _myId) {
-				_remotes.ApplyState(msg.id, msg.state);
+				_remotes.ApplyState(msg.id, msg.state, msg.timeMs);
 			}
 			break;
 		}

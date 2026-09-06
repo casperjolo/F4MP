@@ -221,6 +221,49 @@ namespace f4mp::client::game
 		}
 	}
 
+	void DriveClone(RE::Actor* a_actor, const RE::NiPoint3& a_position, float a_yaw)
+	{
+		if (!a_actor) {
+			return;
+		}
+		a_actor->SetPosition(a_position, true);
+		a_actor->SetHeading(a_yaw);
+		// The engine syncs the 3D from the reference position during the actor's own update;
+		// depending on where in the frame this runs the mesh would otherwise trail by a frame.
+		a_actor->Update3DPosition(true);
+	}
+
+	void SetLocomotion(RE::Actor* a_actor, float a_speed, bool a_sprinting, bool a_first)
+	{
+		if (!a_actor) {
+			return;
+		}
+
+		// Interned once; the string pool is alive whenever this runs.
+		static const RE::BSFixedString SPEED_SAMPLED("SpeedSampled");
+		static const RE::BSFixedString DIRECTION("Direction");
+		static const RE::BSFixedString ANIMATION_DRIVEN("bAnimationDriven");
+		static const RE::BSFixedString IS_RUNNING("IsRunning");
+		static const RE::BSFixedString IS_SPRINTING("IsSprinting");
+
+		constexpr float STOP_SPEED = 8.0f;   // below this the clone is standing (units/s)
+		constexpr float RUN_SPEED = 260.0f;  // walk/run split; walking is ~110-160, running ~350+
+		constexpr float MAX_SPEED = 900.0f;
+
+		if (a_first) {
+			a_actor->SetGraphVariableBool(ANIMATION_DRIVEN, false);
+		}
+
+		float speed = std::clamp(a_speed, 0.0f, MAX_SPEED);
+		if (speed < STOP_SPEED) {
+			speed = 0.0f;
+		}
+		a_actor->SetGraphVariableFloat(SPEED_SAMPLED, speed);
+		a_actor->SetGraphVariableFloat(DIRECTION, 0.0f); // facing the way it moves
+		a_actor->SetGraphVariableBool(IS_RUNNING, speed >= RUN_SPEED);
+		a_actor->SetGraphVariableBool(IS_SPRINTING, a_sprinting && speed > 0.0f);
+	}
+
 	void Despawn(RE::ObjectRefHandle& a_handle)
 	{
 		if (auto ref = a_handle.get()) {

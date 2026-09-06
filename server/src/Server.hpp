@@ -90,6 +90,9 @@ namespace f4mp::server
 		[[nodiscard]] Player* FindPlayer(PlayerId a_id);
 		[[nodiscard]] Player* FirstPlayerWithState();
 
+		// Milliseconds since the server started; the time base clients interpolate on.
+		[[nodiscard]] std::uint32_t NowMs() const;
+
 		PlayerId AddBot(Bot::Mode a_mode, std::string a_name);
 		bool RemoveBot(PlayerId a_id);
 		void UpdateBots();
@@ -99,6 +102,7 @@ namespace f4mp::server
 		std::unordered_map<ENetPeer*, std::unique_ptr<Player>> _players;
 		std::vector<Bot> _bots;
 		std::chrono::steady_clock::time_point _lastBotUpdate{};
+		std::chrono::steady_clock::time_point _startTime{ std::chrono::steady_clock::now() };
 		PlayerId _nextId{ 1 };
 	};
 }

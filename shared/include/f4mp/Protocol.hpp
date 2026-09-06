@@ -10,7 +10,7 @@
 // Bump PROTOCOL_VERSION whenever a message layout changes. See docs/PROTOCOL.md.
 namespace f4mp
 {
-	inline constexpr std::uint32_t PROTOCOL_VERSION = 2;
+	inline constexpr std::uint32_t PROTOCOL_VERSION = 3;
 	inline constexpr std::uint16_t DEFAULT_PORT = 27015;
 	inline constexpr std::size_t MAX_PLAYER_NAME = 32;
 	inline constexpr std::size_t MAX_CHAT_BYTES = 512; // longer chat lines are cut, not rejected
@@ -238,17 +238,20 @@ namespace f4mp
 		static constexpr auto ID = MsgId::kPlayerStateUpdate;
 
 		PlayerId id{ INVALID_PLAYER_ID };
+		std::uint32_t timeMs{ 0 }; // server clock (ms) when the server relayed it; clients interpolate on it
 		PlayerState state;
 
 		void Write(Writer& w) const
 		{
 			w.U32(id);
+			w.U32(timeMs);
 			WritePlayerState(w, state);
 		}
 
 		bool Read(Reader& r)
 		{
 			id = r.U32();
+			timeMs = r.U32();
 			state = ReadPlayerState(r);
 			return r.Ok();
 		}

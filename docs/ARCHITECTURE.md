@@ -94,8 +94,14 @@ runtime for experiments.
 Dynamic forms do not survive loading a save, so `ForgetActors()` drops both actor handles and
 base-form pointers on `kPreLoadGame` / `kPostLoadGame`; they are recreated on demand.
 
-Movement uses the last two snapshots and renders `InterpDelayMs` in the past
-(`Actor::SetPosition` + `Actor::SetHeading`). Death/resurrection follows the `kStateDead` flag;
+Movement renders `InterpDelayMs` behind server time from a per-player snapshot buffer keyed by
+the server stamp in every `PlayerStateUpdate` (see [PROTOCOL.md](PROTOCOL.md), "Timing"). Each
+frame the clone gets `Actor::SetPosition` + `Actor::SetHeading` followed by `Update3DPosition`,
+so the mesh never trails the reference. Nothing moves the actor through its own movement
+controller, so the animation graph would idle; instead the speed of the rendered motion is fed
+into the graph variables `SpeedSampled`, `Direction`, `IsRunning` and `IsSprinting` every frame,
+with `bAnimationDriven` off so clips play without root-motion displacement. (Variable names
+verified against the engine by FO4_Wrld.) Death/resurrection follows the `kStateDead` flag;
 sneaking, weapon drawn and sprinting are pushed through `Actor::SetSneaking`,
 `Actor::DrawWeaponMagicHands` and the `ActorState::sprinting` bit whenever a flag changes.
 

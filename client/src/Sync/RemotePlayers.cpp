@@ -7,6 +7,10 @@ namespace f4mp::client
 	namespace
 	{
 		constexpr auto SPAWN_RETRY_INTERVAL = std::chrono::seconds(1);
+		constexpr std::size_t MAX_SNAPSHOTS = 64;
+		constexpr double SNAPSHOT_KEEP_MS = 1500.0;   // history kept behind the render time
+		constexpr double MAX_EXTRAPOLATE_MS = 150.0;  // beyond the newest snapshot
+		constexpr double MAX_VELOCITY_GAP_MS = 400.0; // pairs further apart carry no useful velocity
 
 		float Lerp(float a_a, float a_b, float a_t) noexcept
 		{
@@ -25,7 +29,20 @@ namespace f4mp::client
 			}
 			return a_a + delta * a_t;
 		}
+
+		PlayerState Blend(const PlayerState& a_a, const PlayerState& a_b, float a_t)
+		{
+			PlayerState out = a_t < 0.5f ? a_a : a_b; // discrete fields follow the nearer snapshot
+			out.position.x = Lerp(a_a.position.x, a_b.position.x, a_t);
+			out.position.y = Lerp(a_a.position.y, a_b.position.y, a_t);
+			out.position.z = Lerp(a_a.position.z, a_b.position.z, a_t);
+			out.yaw = LerpAngle(a_a.yaw, a_b.yaw, a_t);
+			out.health = Lerp(a_a.health, a_b.health, a_t);
+			return out;
+		}
 	}
+
+	// ---- bookkeeping --------------------------------------------------------------
 
 	void RemotePlayers::Add(PlayerId a_id, std::string a_name)
 	{
@@ -63,7 +80,7 @@ namespace f4mp::client
 		_players.erase(it);
 	}
 
-	void RemotePlayers::ApplyState(PlayerId a_id, const PlayerState& a_state)
+	void RemotePlayers::ApplyState(PlayerId a_id, const PlayerState& a_state, std::uint32_t a_serverMs)
 	{
 		auto it = _players.find(a_id);
 		if (it == _players.end()) {
@@ -72,17 +89,40 @@ namespace f4mp::client
 			it = _players.find(a_id);
 		}
 
-		auto& player = it->second;
-		const auto now = std::chrono::steady_clock::now();
-		if (!player.hasState) {
-			player.prev = Snapshot{ a_state, now };
-			player.next = player.prev;
-			player.hasState = true;
-		} else {
-			player.prev = player.next;
-			player.next = Snapshot{ a_state, now };
+		NoteServerTime(a_serverMs);
+
+		auto& snapshots = it->second.snapshots;
+		// Sequenced channel: a stale packet is dropped by ENet, but be safe about ordering.
+		if (!snapshots.empty() && static_cast<std::int32_t>(a_serverMs - snapshots.back().serverMs) < 0) {
+			return;
+		}
+		snapshots.push_back(Snapshot{ a_state, a_serverMs });
+		while (snapshots.size() > MAX_SNAPSHOTS) {
+			snapshots.pop_front();
 		}
 	}
+
+	// ---- clock ------------------------------------------------------------------------
+
+	double RemotePlayers::LocalMs() noexcept
+	{
+		return std::chrono::duration<double, std::milli>(Clock::now().time_since_epoch()).count();
+	}
+
+	void RemotePlayers::NoteServerTime(std::uint32_t a_serverMs)
+	{
+		const double sample = LocalMs() - static_cast<double>(a_serverMs);
+		if (!_hasOffset) {
+			_hasOffset = true;
+			_offsetMs = sample;
+		} else if (sample < _offsetMs) {
+			_offsetMs = sample; // a faster packet: better estimate of the minimum transit time
+		} else {
+			_offsetMs += (sample - _offsetMs) * 0.02; // slow drift so clock skew cannot pin us
+		}
+	}
+
+	// ---- per frame ------------------------------------------------------------------
 
 	void RemotePlayers::Update()
 	{
@@ -92,19 +132,66 @@ namespace f4mp::client
 			return;
 		}
 
-		const auto now = std::chrono::steady_clock::now();
+		const auto now = Clock::now();
+		// Render slightly in the past (server time) so there is normally a snapshot ahead of us.
+		const double renderMs = LocalMs() - _offsetMs - static_cast<double>(_interpDelayMs);
 		for (auto& [id, player] : _players) {
-			UpdateOne(player, *localSpace, now);
+			UpdateOne(player, *localSpace, now, renderMs);
 		}
 	}
 
-	void RemotePlayers::UpdateOne(RemotePlayer& a_player, const game::Space& a_localSpace, std::chrono::steady_clock::time_point a_now)
+	PlayerState RemotePlayers::Sample(const RemotePlayer& a_player, double a_renderMs)
 	{
-		if (!a_player.hasState) {
+		const auto& s = a_player.snapshots;
+		if (s.size() == 1 || a_renderMs <= static_cast<double>(s.front().serverMs)) {
+			return s.front().state;
+		}
+
+		const auto& last = s.back();
+		if (a_renderMs >= static_cast<double>(last.serverMs)) {
+			// Past the newest snapshot: extrapolate a little from the last pair, then hold.
+			const auto& prev = s[s.size() - 2];
+			const double gap = static_cast<double>(last.serverMs - prev.serverMs);
+			const double ahead = std::min(a_renderMs - static_cast<double>(last.serverMs), MAX_EXTRAPOLATE_MS);
+			if (gap <= 0.0 || gap > MAX_VELOCITY_GAP_MS || ahead <= 0.0) {
+				return last.state;
+			}
+			const float t = static_cast<float>(ahead / gap);
+			PlayerState out = last.state;
+			out.position.x += (last.state.position.x - prev.state.position.x) * t;
+			out.position.y += (last.state.position.y - prev.state.position.y) * t;
+			out.position.z += (last.state.position.z - prev.state.position.z) * t;
+			return out;
+		}
+
+		// Find the pair bracketing the render time.
+		for (std::size_t i = 0; i + 1 < s.size(); ++i) {
+			const auto& a = s[i];
+			const auto& b = s[i + 1];
+			if (a_renderMs < static_cast<double>(a.serverMs) || a_renderMs > static_cast<double>(b.serverMs)) {
+				continue;
+			}
+			const double span = static_cast<double>(b.serverMs - a.serverMs);
+			const float t = span > 0.0 ? static_cast<float>((a_renderMs - static_cast<double>(a.serverMs)) / span) : 1.0f;
+			return Blend(a.state, b.state, std::clamp(t, 0.0f, 1.0f));
+		}
+		return last.state;
+	}
+
+	void RemotePlayers::UpdateOne(RemotePlayer& a_player, const game::Space& a_localSpace, Clock::time_point a_now, double a_renderMs)
+	{
+		if (!a_player.HasState()) {
 			return;
 		}
 
-		const auto targetSpace = game::SpaceFromState(a_player.next.state);
+		// Forget history well behind the render time (keep two so velocity is still available).
+		auto& snapshots = a_player.snapshots;
+		while (snapshots.size() > 2 && static_cast<double>(snapshots[1].serverMs) + SNAPSHOT_KEEP_MS < a_renderMs) {
+			snapshots.pop_front();
+		}
+
+		const auto& latest = a_player.Latest();
+		const auto targetSpace = game::SpaceFromState(latest);
 		const auto visible = targetSpace.SameArea(a_localSpace);
 
 		auto ref = a_player.actor.get();
@@ -147,7 +234,7 @@ namespace f4mp::client
 				return;
 			}
 
-			a_player.actor = game::SpawnPlayerClone(base, game::ToNi(a_player.next.state.position), a_player.next.state.yaw, targetSpace);
+			a_player.actor = game::SpawnPlayerClone(base, game::ToNi(latest.position), latest.yaw, targetSpace);
 			ref = a_player.actor.get();
 			actor = ref ? ref->As<RE::Actor>() : nullptr;
 			if (!actor) {
@@ -161,6 +248,9 @@ namespace f4mp::client
 			a_player.actorSpace = targetSpace;
 			a_player.actorDead = false;
 			a_player.actorPacified = false;
+			a_player.locomotionInit = false;
+			a_player.hasLastRender = false;
+			a_player.speed = 0.0f;
 			a_player.appliedFlags = kStateNone;
 			REX::LogInformation("Spawned actor 0x{:08X} for #{} \"{}\""sv, actor->GetFormID(), a_player.id, a_player.name);
 		}
@@ -180,31 +270,25 @@ namespace f4mp::client
 			return; // experiment: leave the actor entirely to the engine
 		}
 
-		// Render the remote player slightly in the past so there is always a snapshot to move towards.
-		const auto delay = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-			std::chrono::duration<float, std::milli>(_interpDelayMs));
-		const auto renderTime = a_now - delay;
+		const auto sample = Sample(a_player, a_renderMs);
+		const auto position = game::ToNi(sample.position);
+		game::DriveClone(actor, position, sample.yaw);
 
-		float t = 1.0f;
-		if (a_player.next.time > a_player.prev.time) {
-			const auto span = std::chrono::duration<float>(a_player.next.time - a_player.prev.time).count();
-			const auto elapsed = std::chrono::duration<float>(renderTime - a_player.prev.time).count();
-			t = std::clamp(elapsed / span, 0.0f, 1.0f);
+		// Speed of the rendered motion, smoothed, drives the walk / run animation.
+		if (a_player.hasLastRender) {
+			const float dt = std::chrono::duration<float>(a_now - a_player.lastRenderTime).count();
+			if (dt > 0.0f) {
+				const float dx = position.x - a_player.lastRenderPos.x;
+				const float dy = position.y - a_player.lastRenderPos.y;
+				const float instant = std::sqrt(dx * dx + dy * dy) / dt;
+				a_player.speed += (instant - a_player.speed) * std::clamp(dt * 12.0f, 0.0f, 1.0f);
+			}
 		}
+		a_player.lastRenderPos = position;
+		a_player.lastRenderTime = a_now;
+		a_player.hasLastRender = true;
 
-		const auto& a = a_player.prev.state;
-		const auto& b = a_player.next.state;
-
-		const RE::NiPoint3 position(
-			Lerp(a.position.x, b.position.x, t),
-			Lerp(a.position.y, b.position.y, t),
-			Lerp(a.position.z, b.position.z, t));
-		const auto yaw = LerpAngle(a.yaw, b.yaw, t);
-
-		actor->SetPosition(position, true);
-		actor->SetHeading(yaw);
-
-		const auto dead = (b.flags & kStateDead) != 0;
+		const auto dead = (latest.flags & kStateDead) != 0;
 		if (dead != a_player.actorDead) {
 			if (dead) {
 				actor->KillImpl(nullptr, 0.0f, false, false);
@@ -214,13 +298,17 @@ namespace f4mp::client
 			a_player.actorDead = dead;
 		}
 
-		// Sneak / weapon / sprint only matter while alive; a corpse keeps whatever it had.
+		// Sneak / weapon / sprint / locomotion only matter while alive; a corpse keeps whatever it had.
 		if (!dead) {
-			const auto flags = static_cast<std::uint8_t>(b.flags & ~kStateDead);
+			const auto flags = static_cast<std::uint8_t>(latest.flags & ~kStateDead);
 			game::ApplyStateFlags(actor, flags, a_player.appliedFlags);
 			a_player.appliedFlags = flags;
+			game::SetLocomotion(actor, a_player.speed, (flags & kStateSprinting) != 0, !a_player.locomotionInit);
+			a_player.locomotionInit = true;
 		}
 	}
+
+	// ---- lifecycle ----------------------------------------------------------------------
 
 	void RemotePlayers::DespawnAll()
 	{
@@ -237,6 +325,9 @@ namespace f4mp::client
 			player.baseFailed = false;
 			player.actorDead = false;
 			player.actorPacified = false;
+			player.locomotionInit = false;
+			player.hasLastRender = false;
+			player.speed = 0.0f;
 			player.appliedFlags = kStateNone;
 			player.lastSpawnAttempt = {};
 		}
@@ -273,6 +364,9 @@ namespace f4mp::client
 			player.actor.reset();
 			player.actorDead = false;
 			player.actorPacified = false;
+			player.locomotionInit = false;
+			player.hasLastRender = false;
+			player.speed = 0.0f;
 			player.appliedFlags = kStateNone;
 			player.base = nullptr; // dynamic form, gone with the previous game
 			player.baseFailed = false;
@@ -283,6 +377,7 @@ namespace f4mp::client
 	{
 		DespawnAll();
 		_players.clear();
+		_hasOffset = false;
 	}
 
 	const RemotePlayer* RemotePlayers::Find(PlayerId a_id) const

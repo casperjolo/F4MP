@@ -58,6 +58,14 @@ namespace f4mp::client::game
 	// Pushes sneaking / weapon drawn / sprinting into the clone for every bit that changed.
 	void ApplyStateFlags(RE::Actor* a_actor, std::uint8_t a_flags, std::uint8_t a_previous);
 
+	// Moves the clone to a rendered position/heading and syncs its 3D in the same frame.
+	void DriveClone(RE::Actor* a_actor, const RE::NiPoint3& a_position, float a_yaw);
+
+	// Feeds the animation graph the locomotion it would normally derive from its own movement:
+	// SpeedSampled / Direction / IsRunning / IsSprinting, with animation-driven root motion off
+	// (a_first) so clips play without displacing the actor. Names verified by FO4_Wrld.
+	void SetLocomotion(RE::Actor* a_actor, float a_speed, bool a_sprinting, bool a_first);
+
 	// Disables and deletes the reference (if it still exists) and clears the handle.
 	void Despawn(RE::ObjectRefHandle& a_handle);
 
