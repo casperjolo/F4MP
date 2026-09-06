@@ -21,9 +21,9 @@ namespace f4mp::client
 		constexpr auto LOOKS_MENU = "LooksMenu";     // face character creator
 		constexpr auto SPECIAL_MENU = "SPECIALMenu"; // name + SPECIAL registration form
 
-		constexpr float FACE_MENU_GRACE = 3.0f;      // seconds for the race menu to actually appear
+		constexpr float MENU_GRACE = 3.0f;            // seconds for a requested menu to actually appear
 		constexpr float QUEST_START_FALLBACK = 45.0f; // run anyway if MQ101 never reports stage 10
-		constexpr float SEX_CHANGE_SETTLE = 1.0f;     // seconds for the 3D to rebuild after a sex change
+		constexpr float SEX_CHANGE_SETTLE = 3.0f;     // seconds for the 3D to rebuild after a sex change
 
 		// Set by the message box callback; -1 while unanswered.
 		std::atomic<int> g_sexChoice{ -1 };
@@ -73,6 +73,7 @@ namespace f4mp::client
 		_questStartedAt = {};
 		_next = 0;
 		_faceMenuSeen = false;
+		_specialMenuSeen = false;
 		_loggedWaiting = false;
 		_sexChanged = false;
 		g_sexChoice = -1;
@@ -161,6 +162,12 @@ namespace f4mp::client
 			if (now < _waitUntil) {
 				return; // letting a sex change settle before the face editor
 			}
+			if (_sexChanged) {
+				auto* player = RE::PlayerCharacter::GetSingleton();
+				if (player && !player->Is3DLoaded()) {
+					return; // the swap rebuilds the whole character; the face editor needs it finished
+				}
+			}
 			const int choice = g_sexChoice.load();
 			if (choice < 0) {
 				if (now - _stateSince > Seconds(_settings.podTimeout)) {
@@ -178,13 +185,33 @@ namespace f4mp::client
 				_faceMenuSeen = true;
 				return;
 			}
-			if (!_faceMenuSeen && now - _stateSince < Seconds(FACE_MENU_GRACE)) {
+			if (!_faceMenuSeen && now - _stateSince < Seconds(MENU_GRACE)) {
 				return; // give it a moment to appear
 			}
 			if (!_faceMenuSeen) {
 				REX::LogWarning("Prologue skip: the race menu never opened"sv);
 			}
 			OpenSpecialMenu();
+			_specialMenuSeen = false;
+			_stateSince = now;
+			_state = State::kSpecialMenu;
+			return;
+		}
+
+		case State::kSpecialMenu: {
+			if (IsMenuOpen(SPECIAL_MENU)) {
+				_specialMenuSeen = true;
+				return;
+			}
+			if (!_specialMenuSeen && now - _stateSince < Seconds(MENU_GRACE)) {
+				return;
+			}
+			if (!_specialMenuSeen) {
+				REX::LogWarning("Prologue skip: the SPECIAL menu never opened"sv);
+			}
+			// The vanilla flow re-enables controls, HUD and camera from its quest script once the
+			// menus are done; nothing does that for us, so do it here.
+			game::RestorePlayerControl();
 			Finish("character creation done");
 			return;
 		}
@@ -283,6 +310,7 @@ namespace f4mp::client
 			// then falls through to the face editor whatever the result.
 			_sexChanged = true;
 			RE::Script::ExecuteSingleLineConsoleCommand("player.sexchange", nullptr, false);
+			REX::LogInformation("Prologue skip: sex changed, waiting for the character to rebuild"sv);
 			_waitUntil = Clock::now() + Seconds(SEX_CHANGE_SETTLE);
 			return;
 		}

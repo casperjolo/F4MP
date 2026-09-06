@@ -15,7 +15,7 @@ namespace f4mp::client::console
 		constexpr auto HIJACKED_COMMAND = "TestSeenData"sv;
 		constexpr auto COMMAND_NAME = "F4MP";
 		constexpr auto COMMAND_SHORT = "f4mp";
-		constexpr auto COMMAND_HELP = "F4MP multiplayer. Usage: f4mp help | status | connect [host[:port]] | disconnect | say <text> | list | name <name>";
+		constexpr auto COMMAND_HELP = "F4MP multiplayer. Usage: f4mp help | status | connect [host[:port]] | disconnect | say <text> | list | name <name> | unstick";
 
 		// One optional string parameter keeps the script compiler happy with "f4mp status".
 		// The real argument line is read back from the script text so that
@@ -88,7 +88,8 @@ namespace f4mp::client::console
 			game::ConsolePrint("  f4mp disconnect              leave the server (no auto-reconnect)");
 			game::ConsolePrint("  f4mp say <text>              chat");
 			game::ConsolePrint("  f4mp list                    players on the server");
-			game::ConsolePrint("  f4mp name <name>             change your name (used on the next connect)");
+			game::ConsolePrint("  f4mp name <name>             change your name");
+			game::ConsolePrint("  f4mp unstick                 restore controls, HUD and camera after a menu froze you");
 		}
 
 		bool ExecuteCommand(
@@ -172,6 +173,9 @@ namespace f4mp::client::console
 				return;
 			}
 			session.SetPlayerName(name);
+		} else if (IEquals(cmd, "unstick")) {
+			game::RestorePlayerControl();
+			game::ConsolePrint("[F4MP] Controls, HUD and camera restored.");
 		} else {
 			game::ConsolePrint("[F4MP] Unknown command \"" + std::string(cmd) + "\"");
 			Usage();

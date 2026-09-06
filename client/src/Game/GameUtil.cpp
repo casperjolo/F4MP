@@ -194,4 +194,23 @@ namespace f4mp::client::game
 		}
 		a_handle.reset();
 	}
+
+	void RestorePlayerControl()
+	{
+		RE::Script::ExecuteSingleLineConsoleCommand("EnablePlayerControls", nullptr, true);
+
+		if (auto vm = RE::GameVM::GetVMInterface()) {
+			using Callback = RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor>;
+			vm->InvokeStaticFunction(RE::BSFixedString("Game"), RE::BSFixedString("SetInChargen"), Callback{}, false, false, false);
+			vm->InvokeStaticFunction(RE::BSFixedString("Game"), RE::BSFixedString("ForceFirstPerson"), Callback{});
+		}
+
+		auto* ui = RE::UI::GetSingleton();
+		auto* queue = RE::UIMessageQueue::GetSingleton();
+		if (ui && queue && !ui->IsMenuOpen(RE::BSFixedString("HUDMenu")).value_or(true)) {
+			queue->AddMessage(RE::BSFixedString("HUDMenu"), RE::UI_MESSAGE_TYPE::kShow);
+		}
+
+		REX::LogInformation("Restored player controls, chargen flags, HUD and camera"sv);
+	}
 }

@@ -56,7 +56,8 @@ Open the console with `~` and use the `f4mp` command:
 | `f4mp disconnect` | Leave; auto-connect stays off until `f4mp connect` or the next save load |
 | `f4mp say <text>` | Chat (no quotes needed) |
 | `f4mp list` | Everyone on the server and whether they are in view |
-| `f4mp name <name>` | Change your name; applies on the next connect |
+| `f4mp name <name>` | Change your name |
+| `f4mp unstick` | Restore controls, HUD and camera if a menu left you frozen |
 | `f4mp help` | This list |
 
 ### New game: straight to Vault 111

@@ -51,7 +51,12 @@ steps: a stock message box asks Male/Female and, if that differs from the curren
 the Papyrus VM (`GameVM::GetVMInterface()->InvokeStaticFunction`) for the face (mode 0, the
 start-of-game variant with the sex toggle, needs the two pre-war spouse actors loaded side by
 side, and they are unloaded by 2287); and when `LooksMenu` closes, `Game.ShowSPECIALMenu()` for
-the name and SPECIAL form. Every step is written to `F4MP.log` with a "Prologue skip:" prefix.
+the name and SPECIAL form. After a sex change it waits for the player's 3D to finish rebuilding
+before opening the face editor. When the SPECIAL form closes it calls
+`game::RestorePlayerControl()` (`EnablePlayerControls`, `Game.SetInChargen(false)`, show
+`HUDMenu`, `Game.ForceFirstPerson`), because those menus normally sit inside quest scripts that
+do this and otherwise leave the player frozen with no HUD; `f4mp unstick` runs the same by hand.
+Every step is written to `F4MP.log` with a "Prologue skip:" prefix.
 
 Because the character has no name until that form, the session re-reads the character name
 every two seconds and sends `SetName` when it changes; the server answers with `PlayerRenamed`

@@ -39,8 +39,9 @@ namespace f4mp::client
 			kArmed,      // new game started, waiting for the prologue quest to start
 			kRunning,    // executing the command list
 			kWaitForPod, // commands done, waiting for the player to leave the cryo pod
-			kSexChoice,  // male/female message box is up
-			kFaceMenu,   // race menu requested, waiting for it to close
+			kSexChoice,   // male/female message box is up
+			kFaceMenu,    // race menu requested, waiting for it to close
+			kSpecialMenu, // name + SPECIAL form requested, waiting for it to close
 			kDone
 		};
 
@@ -66,6 +67,7 @@ namespace f4mp::client
 		Clock::time_point _stateSince{};
 		Clock::time_point _waitUntil{};
 		bool _faceMenuSeen{ false };
+		bool _specialMenuSeen{ false };
 		bool _loggedWaiting{ false };
 		bool _sexChanged{ false };
 	};

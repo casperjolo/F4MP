@@ -56,4 +56,9 @@ namespace f4mp::client::game
 
 	// Disables and deletes the reference (if it still exists) and clears the handle.
 	void Despawn(RE::ObjectRefHandle& a_handle);
+
+	// Re-enables player controls, leaves chargen mode, shows the HUD and goes first person.
+	// The character-creation menus normally run inside quest scripts that do this afterwards;
+	// when they are opened by hand the player can be left frozen with no HUD.
+	void RestorePlayerControl();
 }
