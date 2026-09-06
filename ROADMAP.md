@@ -18,10 +18,10 @@ player is a real actor, NPCs are shared, and the server is authoritative. Phases
 - [x] Server-side bots (`bot add mirror|orbit`) for testing clones with one client (untested in-game)
 - [ ] Two clients on one server: clone spawns, follows movement, shows the remote name
 - [x] Prologue skip: new game wakes up in the Vault 111 cryo pod with the character creator
-      (verified 2026-09-06: `setstage MQ101 900` + Game.ShowRaceMenu + ShowSPECIALMenu)
-- [ ] Prologue skip: verify the male/female prompt + `player.sexchange`, and that running works
-- [x] Name sync: `SetName` / `PlayerRenamed` once the SPECIAL form names the character (untested)
-- [x] ENet peer timeouts raised so loading screens no longer drop the connection (untested)
+      (verified 2026-09-06: male/female in the bathroom, `setstage MQ101 900`, face + SPECIAL at
+      the pod, controls/HUD restored afterwards)
+- [x] Name sync: `SetName` / `PlayerRenamed` once the SPECIAL form names the character (verified)
+- [x] ENet peer timeouts raised so loading screens no longer drop the connection
 
 ## Phase 1 – Players that look and act like players
 
