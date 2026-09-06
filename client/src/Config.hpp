@@ -17,14 +17,11 @@ namespace f4mp::client
 		float skipDelay{ 2.0f };
 		float podTimeout{ 120.0f };
 		std::vector<std::string> skipCommands{
-			"setstage MQ101TVStation 200", // stop the TV broadcast scene
-			"setstage MQ101 805",          // into the pod, fade to white
-			"wait 6",
-			"setstage MQ101 900",          // 2287: skip the Kellogg scene, the pod opens
-			"removemusic 1A8676",          // pre-war music
+			"setstage MQ101 900", // 2287: teleports into the vault, skips the Kellogg scene, the pod opens
+			"removemusic 1A8676", // pre-war music
 		};
 		bool chargen{ true };
-		std::int32_t chargenMode{ 0 };
+		std::int32_t chargenMode{ 0 }; // 0: ask for the sex, then face; 1: face only
 
 		std::filesystem::path path;
 

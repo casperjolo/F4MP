@@ -47,6 +47,7 @@ namespace f4mp::client
 
 		void HandlePacket(std::span<const std::uint8_t> a_bytes);
 		void SendState(bool a_force);
+		void SyncName();
 		void Print(const std::string& a_text) const;
 		[[nodiscard]] std::string ServerAddress() const;
 
@@ -58,6 +59,8 @@ namespace f4mp::client
 
 		PlayerId _myId{ INVALID_PLAYER_ID };
 		std::string _serverName;
+		std::string _sentName; // name the server currently knows us by
+		std::chrono::steady_clock::time_point _lastNameCheck{};
 		bool _inWorld{ false };
 		bool _welcomed{ false };
 		bool _manualDisconnect{ false };

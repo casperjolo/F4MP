@@ -62,8 +62,8 @@ Open the console with `~` and use the `f4mp` command:
 ### New game: straight to Vault 111
 
 On a new game the plugin skips the pre-war Sanctuary prologue. You wake up in your cryo pod in
-2287 and the character creator opens right there (face, then name and SPECIAL), so everyone on a
-server starts the same way. Loading a save is never touched. Turn it off or tweak the exact
+2287 and the character creator opens right there (male/female, face, then name and SPECIAL), so
+everyone on a server starts the same way. Loading a save is never touched. Turn it off or tweak the exact
 console sequence it uses under `[NewGame]` in `F4MP.ini`; everything it does is logged to
 `F4MP.log`. The vault exit elevator still offers the vanilla re-customisation as a fallback.
 

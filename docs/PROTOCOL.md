@@ -1,4 +1,4 @@
-# Wire protocol (v1)
+# Wire protocol (v2)
 
 Transport: ENet, two channels (`0` reliable, `1` unreliable sequenced). Every packet starts with
 a one-byte message id followed by the payload. All integers are little-endian; `str` is
@@ -24,6 +24,7 @@ PlayerState Vec3 position
 | 1 | Hello | reliable | `u32 protocolVersion`, `u32 gameVersion` (major<<24 \| minor<<16 \| build), `str name` |
 | 2 | PlayerState | unreliable | `PlayerState` |
 | 3 | Chat | reliable | `str text` |
+| 4 | SetName | reliable | `str name` (the character was named or renamed after connecting) |
 
 ## Server → client
 
@@ -35,6 +36,7 @@ PlayerState Vec3 position
 | 67 | PlayerLeft | reliable | `u32 id` |
 | 68 | PlayerStateUpdate | unreliable (reliable when replaying to a newcomer) | `u32 id`, `PlayerState` |
 | 69 | ChatBroadcast | reliable | `u32 fromId` (0 = server), `str text` |
+| 70 | PlayerRenamed | reliable | `u32 id`, `str name` (sent to everyone, including the renamed player) |
 
 ## Handshake
 
@@ -53,6 +55,8 @@ Any message other than `Hello` before the handshake completes gets the sender ki
 
 ## Server-side policy (not part of the layout)
 
+* Both sides set ENet peer timeouts to 60 s minimum / 180 s maximum so loading screens, which
+  freeze the client's network pump, do not drop the connection.
 * `PlayerState` with NaN/inf in any float is dropped.
 * `Chat` is cut to 512 bytes, control characters are stripped, and a client gets at most 6
   messages per 5 seconds (extra ones are dropped, with one "Slow down." reply).

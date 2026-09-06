@@ -36,21 +36,26 @@ Everything is single-threaded on the game thread, so engine calls need no lockin
 
 ### Prologue skip (`Game/PrologueSkip.cpp`)
 
-Armed by `kNewGame` only, so saves are never affected. Once the player has a parent cell and
-`SkipDelay` has passed, it closes the mirror character creator if it is open (`UIMessageQueue`
-hide on `LooksMenu`) and runs the `[NewGame] SkipCommands` list through
-`Script::ExecuteSingleLineConsoleCommand`. The default list is the sequence the community uses:
-stop the TV scene (`MQ101TVStation` 200), enter the pod (`MQ101` 805, fades to white), wait,
-wake in 2287 with the Kellogg scene skipped (`MQ101` 900), and drop the pre-war music.
+Armed by `kNewGame` only, so saves are never affected. Console commands are ignored until the game
+has really started, so it waits for `MQ101` ("War Never Changes", form `0001ED86`) to reach stage
+10 (the bathroom scene) plus `SkipDelay`, closes the mirror character creator if it is open
+(`UIMessageQueue` hide on `LooksMenu`) and runs the `[NewGame] SkipCommands` list through
+`Script::ExecuteSingleLineConsoleCommand`. The default is `setstage MQ101 900`, which teleports
+the player into the 2287 vault with the Kellogg scene skipped and opens the pod, plus dropping
+the pre-war music. (Verified in-game on 1.11.240: stage 900 alone does the whole job.)
 
 It then polls the quests: `MQ102` ("Out of Time", form `0001CC2A`) reaching stage 1, or `MQ101`
-("War Never Changes", form `0001ED86`) reaching 1000, means the player is out of the pod. At that
-point it dispatches `Game.ShowRaceMenu(player, mode, spouseFemale, spouseMale)` through the
-Papyrus VM (`GameVM::GetVMInterface()->InvokeStaticFunction`). Mode 0 is the full start-of-game
-creator with sex selection and needs the two spouse actors, which are looked up in `MQ101`'s
-aliases by name; if they are not found it falls back to mode 1 (face only). When `LooksMenu`
-closes it dispatches `Game.ShowSPECIALMenu()` for the name and SPECIAL form, unless the quest
-already opened it. Every step and the alias list are written to `F4MP.log`.
+reaching 1000, means the player is out of the pod. The character creator then runs in three
+steps: a stock message box asks Male/Female and, if that differs from the current character, the
+`player.sexchange` console command flips it; `Game.ShowRaceMenu(player, 1)` is dispatched through
+the Papyrus VM (`GameVM::GetVMInterface()->InvokeStaticFunction`) for the face (mode 0, the
+start-of-game variant with the sex toggle, needs the two pre-war spouse actors loaded side by
+side, and they are unloaded by 2287); and when `LooksMenu` closes, `Game.ShowSPECIALMenu()` for
+the name and SPECIAL form. Every step is written to `F4MP.log` with a "Prologue skip:" prefix.
+
+Because the character has no name until that form, the session re-reads the character name
+every two seconds and sends `SetName` when it changes; the server answers with `PlayerRenamed`
+to everyone, and clients rename the clone's base NPC.
 
 ### Remote players
 

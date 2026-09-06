@@ -15,6 +15,11 @@ namespace f4mp::server
 		constexpr auto CHAT_WINDOW = std::chrono::seconds(5);
 		constexpr std::uint32_t CHAT_BURST = 6;
 
+		// Loading screens freeze the client's network pump for a long time; ENet's defaults (5 s /
+		// 30 s) would drop the connection every time a cell loads.
+		constexpr enet_uint32 PEER_TIMEOUT_MIN_MS = 60000;
+		constexpr enet_uint32 PEER_TIMEOUT_MAX_MS = 180000;
+
 		constexpr auto BOT_UPDATE_INTERVAL = std::chrono::milliseconds(50); // 20 Hz, like a client
 		constexpr float BOT_MIRROR_OFFSET = 200.0f;                          // game units east of the player (~3 m)
 		constexpr float BOT_ORBIT_RADIUS = 250.0f;
@@ -141,6 +146,7 @@ namespace f4mp::server
 		auto player = std::make_unique<Player>();
 		player->peer = a_peer;
 		player->joinedAt = std::chrono::steady_clock::now();
+		enet_peer_timeout(a_peer, 0, PEER_TIMEOUT_MIN_MS, PEER_TIMEOUT_MAX_MS);
 		spdlog::info("Incoming connection from {}", PeerAddress(a_peer));
 		_players.emplace(a_peer, std::move(player));
 	}
@@ -191,6 +197,9 @@ namespace f4mp::server
 			break;
 		case MsgId::kChat:
 			HandleChat(*player, reader);
+			break;
+		case MsgId::kSetName:
+			HandleSetName(*player, reader);
 			break;
 		default:
 			spdlog::warn("{} sent unknown message id {}", PeerAddress(a_peer), static_cast<int>(id));
@@ -296,6 +305,23 @@ namespace f4mp::server
 
 		spdlog::info("[chat] {}: {}", a_player.name, msg.text);
 		Broadcast(Channel::kReliable, Encode(ChatBroadcastMsg{ a_player.id, msg.text }));
+	}
+
+	void Server::HandleSetName(Player& a_player, Reader& a_reader)
+	{
+		SetNameMsg msg;
+		if (!msg.Read(a_reader)) {
+			return;
+		}
+
+		const auto name = SanitizeName(msg.name);
+		if (name == a_player.name) {
+			return;
+		}
+
+		spdlog::info("{} (#{}) is now known as {}", a_player.name, a_player.id, name);
+		a_player.name = name;
+		Broadcast(Channel::kReliable, Encode(PlayerRenamedMsg{ a_player.id, a_player.name }));
 	}
 
 	// ---- sending --------------------------------------------------------------

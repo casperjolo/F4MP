@@ -4,6 +4,7 @@
 
 #include "Game/GameUtil.hpp"
 
+#include <atomic>
 #include <cctype>
 #include <charconv>
 
@@ -14,12 +15,28 @@ namespace f4mp::client
 		// Fallout4.esm is always load slot 00, so these are absolute.
 		constexpr RE::TESFormID MQ101_ID = 0x0001ED86; // "War Never Changes": the prologue
 		constexpr RE::TESFormID MQ102_ID = 0x0001CC2A; // "Out of Time": starts when the player leaves the pod
+		constexpr std::uint16_t MQ101_STARTED = 10;    // "Create character": the bathroom scene is up
 		constexpr std::uint16_t MQ101_POD_OPENS = 900; // the stage that puts the player outside the pod
 
-		constexpr auto LOOKS_MENU = "LooksMenu";     // face / sex character creator
+		constexpr auto LOOKS_MENU = "LooksMenu";     // face character creator
 		constexpr auto SPECIAL_MENU = "SPECIALMenu"; // name + SPECIAL registration form
 
-		constexpr float FACE_MENU_GRACE = 3.0f; // seconds for the race menu to actually appear
+		constexpr float FACE_MENU_GRACE = 3.0f;      // seconds for the race menu to actually appear
+		constexpr float QUEST_START_FALLBACK = 45.0f; // run anyway if MQ101 never reports stage 10
+		constexpr float SEX_CHANGE_SETTLE = 1.0f;     // seconds for the 3D to rebuild after a sex change
+
+		// Set by the message box callback; -1 while unanswered.
+		std::atomic<int> g_sexChoice{ -1 };
+
+		class SexChoiceCallback final
+			: public RE::IMessageBoxCallback
+		{
+		public:
+			void operator()(std::uint8_t a_buttonIndex) override
+			{
+				g_sexChoice = a_buttonIndex;
+			}
+		};
 
 		std::chrono::steady_clock::duration Seconds(float a_seconds)
 		{
@@ -38,19 +55,6 @@ namespace f4mp::client
 			}
 			return true;
 		}
-
-		bool ContainsIgnoreCase(std::string_view a_s, std::string_view a_needle) noexcept
-		{
-			if (a_needle.empty() || a_s.size() < a_needle.size()) {
-				return false;
-			}
-			for (std::size_t i = 0; i + a_needle.size() <= a_s.size(); ++i) {
-				if (StartsWithIgnoreCase(a_s.substr(i), a_needle)) {
-					return true;
-				}
-			}
-			return false;
-		}
 	}
 
 	void PrologueSkip::Configure(Settings a_settings)
@@ -65,9 +69,13 @@ namespace f4mp::client
 			return;
 		}
 		_state = State::kArmed;
-		_placedAt = {};
+		_armedAt = Clock::now();
+		_questStartedAt = {};
 		_next = 0;
 		_faceMenuSeen = false;
+		_loggedWaiting = false;
+		_sexChanged = false;
+		g_sexChoice = -1;
 		REX::LogInformation("Prologue skip: armed"sv);
 	}
 
@@ -91,15 +99,27 @@ namespace f4mp::client
 			return;
 
 		case State::kArmed: {
+			// Console commands are ignored until the game has really started; MQ101 reaching
+			// stage 10 (the bathroom scene) is the reliable sign of that.
 			if (!game::GetPlayer()) {
-				_placedAt = {};
 				return;
 			}
-			if (_placedAt == Clock::time_point{}) {
-				_placedAt = now;
-				return;
+			const auto stage = StageOf(MQ101_ID);
+			if (stage < MQ101_STARTED) {
+				if (!_loggedWaiting) {
+					_loggedWaiting = true;
+					REX::LogInformation("Prologue skip: player placed, waiting for MQ101 to start (stage {})"sv, stage);
+				}
+				if (now - _armedAt < Seconds(QUEST_START_FALLBACK)) {
+					return;
+				}
+				REX::LogWarning("Prologue skip: MQ101 still at stage {} after {} s, running anyway"sv, stage, QUEST_START_FALLBACK);
 			}
-			if (now - _placedAt < Seconds(_settings.startDelay)) {
+			if (_questStartedAt == Clock::time_point{}) {
+				_questStartedAt = now;
+				REX::LogInformation("Prologue skip: MQ101 at stage {}, starting in {} s"sv, stage, _settings.startDelay);
+			}
+			if (now - _questStartedAt < Seconds(_settings.startDelay)) {
 				return;
 			}
 			Start();
@@ -121,10 +141,12 @@ namespace f4mp::client
 			const auto mq102 = StageOf(MQ102_ID);
 			if (mq102 >= 1 || mq101 >= 1000) {
 				REX::LogInformation("Prologue skip: out of the pod (MQ101 stage {}, MQ102 stage {})"sv, mq101, mq102);
-				if (_settings.chargen) {
-					OpenFaceMenu();
-				} else {
+				if (!_settings.chargen) {
 					Finish("done");
+				} else if (_settings.chargenMode == 0) {
+					AskSex();
+				} else {
+					OpenFaceMenu();
 				}
 				return;
 			}
@@ -132,6 +154,22 @@ namespace f4mp::client
 				REX::LogWarning("Prologue skip: gave up waiting for the pod (MQ101 stage {}, MQ102 stage {})"sv, mq101, mq102);
 				Finish("the pod did not open in time; the vault exit still offers character customisation");
 			}
+			return;
+		}
+
+		case State::kSexChoice: {
+			if (now < _waitUntil) {
+				return; // letting a sex change settle before the face editor
+			}
+			const int choice = g_sexChoice.load();
+			if (choice < 0) {
+				if (now - _stateSince > Seconds(_settings.podTimeout)) {
+					REX::LogWarning("Prologue skip: no answer to the sex prompt, going on with the face editor"sv);
+					OpenFaceMenu();
+				}
+				return;
+			}
+			ApplySexChoice(choice);
 			return;
 		}
 
@@ -167,8 +205,8 @@ namespace f4mp::client
 		REX::LogInformation("Prologue skip: starting at MQ101 stage {} with {} command(s)"sv, mq101, _settings.commands.size());
 		game::ConsolePrint("[F4MP] Skipping the prologue...");
 
-		// The bathroom mirror may already have opened the character creator; close it, it comes
-		// back once the player is out of the pod.
+		// The bathroom mirror opens the character creator at stage 10; close it, it comes back
+		// once the player is out of the pod.
 		if (IsMenuOpen(LOOKS_MENU)) {
 			if (auto* queue = RE::UIMessageQueue::GetSingleton()) {
 				queue->AddMessage(RE::BSFixedString(LOOKS_MENU), RE::UI_MESSAGE_TYPE::kHide);
@@ -213,6 +251,48 @@ namespace f4mp::client
 		return true;
 	}
 
+	void PrologueSkip::AskSex()
+	{
+		auto* manager = RE::MessageMenuManager::GetSingleton();
+		if (!manager) {
+			REX::LogWarning("Prologue skip: no message box manager, skipping the sex prompt"sv);
+			OpenFaceMenu();
+			return;
+		}
+
+		g_sexChoice = -1;
+		// The engine keeps its own reference to the callback and releases it when done.
+		manager->CreateMessage("F4MP\n\nWho are you?", new SexChoiceCallback(), "Male", "Female");
+		REX::LogInformation("Prologue skip: asking for the sex"sv);
+
+		_waitUntil = Clock::now();
+		_stateSince = Clock::now();
+		_state = State::kSexChoice;
+	}
+
+	void PrologueSkip::ApplySexChoice(int a_choice)
+	{
+		auto* player = RE::PlayerCharacter::GetSingleton();
+		const auto wanted = a_choice == 1 ? RE::SEX::kFemale : RE::SEX::kMale;
+		const auto current = player ? player->GetSex() : RE::SEX::kNone;
+		REX::LogInformation("Prologue skip: sex choice {} (currently {})"sv, wanted, current);
+
+		if (current != wanted && !_sexChanged) {
+			// The stock console command flips the base actor's sex and rebuilds the 3D. Stay in
+			// kSexChoice (the answer is kept) so this runs again once the swap has settled, and
+			// then falls through to the face editor whatever the result.
+			_sexChanged = true;
+			RE::Script::ExecuteSingleLineConsoleCommand("player.sexchange", nullptr, false);
+			_waitUntil = Clock::now() + Seconds(SEX_CHANGE_SETTLE);
+			return;
+		}
+		if (current != wanted) {
+			REX::LogWarning("Prologue skip: the sex change did not take; the vault exit offers another chance"sv);
+		}
+
+		OpenFaceMenu();
+	}
+
 	void PrologueSkip::OpenFaceMenu()
 	{
 		auto* player = RE::PlayerCharacter::GetSingleton();
@@ -222,22 +302,11 @@ namespace f4mp::client
 			return;
 		}
 
-		auto mode = _settings.chargenMode;
-		RE::TESObjectREFR* spouseFemale = nullptr;
-		RE::TESObjectREFR* spouseMale = nullptr;
-		if (mode == 0) {
-			// The full creator swaps between the two spouse actors when the sex is changed.
-			auto* mq101 = RE::TESForm::FindFormByID<RE::TESQuest>(MQ101_ID);
-			spouseFemale = AliasRef(mq101, "SpouseFemale");
-			spouseMale = AliasRef(mq101, "SpouseMale");
-			if (!spouseFemale || !spouseMale) {
-				REX::LogWarning("Prologue skip: spouse aliases not found on MQ101; using remake mode (no sex change)"sv);
-				mode = 1;
-			}
-		}
-
-		REX::LogInformation("Prologue skip: Game.ShowRaceMenu(player, {}, 0x{:08X}, 0x{:08X})"sv,
-			mode, spouseFemale ? spouseFemale->GetFormID() : 0u, spouseMale ? spouseMale->GetFormID() : 0u);
+		// Mode 1 ("remake") edits the player alone; mode 0 needs the two pre-war spouse actors
+		// side by side, which are unloaded by the time we are in 2287, so the sex is handled by
+		// the prompt instead.
+		constexpr std::int32_t mode = 1;
+		REX::LogInformation("Prologue skip: Game.ShowRaceMenu(player, {})"sv, mode);
 
 		const auto ok = vm->InvokeStaticFunction(
 			RE::BSFixedString("Game"),
@@ -245,8 +314,8 @@ namespace f4mp::client
 			RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor>{},
 			static_cast<RE::TESObjectREFR*>(player),
 			mode,
-			spouseFemale,
-			spouseMale,
+			static_cast<RE::TESObjectREFR*>(nullptr),
+			static_cast<RE::TESObjectREFR*>(nullptr),
 			static_cast<RE::TESObjectREFR*>(nullptr));
 		if (!ok) {
 			REX::LogWarning("Prologue skip: Game.ShowRaceMenu could not be dispatched"sv);
@@ -298,39 +367,5 @@ namespace f4mp::client
 			return false;
 		}
 		return ui->IsMenuOpen(RE::BSFixedString(a_menu)).value_or(false);
-	}
-
-	RE::TESObjectREFR* PrologueSkip::AliasRef(RE::TESQuest* a_quest, std::string_view a_nameContains)
-	{
-		if (!a_quest) {
-			return nullptr;
-		}
-
-		for (auto* alias : a_quest->aliases) {
-			if (!alias) {
-				continue;
-			}
-			const auto name = std::string_view(alias->aliasName.c_str());
-			if (!ContainsIgnoreCase(name, a_nameContains)) {
-				continue;
-			}
-			RE::ObjectRefHandle handle;
-			a_quest->GetAliasedRef(&handle, alias->aliasID);
-			if (auto ref = handle.get()) {
-				REX::LogInformation("Prologue skip: alias \"{}\" -> 0x{:08X}"sv, name, ref->GetFormID());
-				return ref.get();
-			}
-		}
-
-		// Help whoever reads the log figure out the real alias names.
-		std::string names;
-		for (auto* alias : a_quest->aliases) {
-			if (alias) {
-				names += names.empty() ? "" : ", ";
-				names += alias->aliasName.c_str();
-			}
-		}
-		REX::LogWarning("Prologue skip: no filled alias containing \"{}\"; quest aliases: {}"sv, a_nameContains, names);
-		return nullptr;
 	}
 }

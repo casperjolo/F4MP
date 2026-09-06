@@ -10,7 +10,7 @@
 // Bump PROTOCOL_VERSION whenever a message layout changes. See docs/PROTOCOL.md.
 namespace f4mp
 {
-	inline constexpr std::uint32_t PROTOCOL_VERSION = 1;
+	inline constexpr std::uint32_t PROTOCOL_VERSION = 2;
 	inline constexpr std::uint16_t DEFAULT_PORT = 27015;
 	inline constexpr std::size_t MAX_PLAYER_NAME = 32;
 	inline constexpr std::size_t MAX_CHAT_BYTES = 512; // longer chat lines are cut, not rejected
@@ -29,6 +29,7 @@ namespace f4mp
 		kHello = 1,
 		kPlayerState = 2,
 		kChat = 3,
+		kSetName = 4,
 
 		// server -> client
 		kWelcome = 64,
@@ -37,6 +38,7 @@ namespace f4mp
 		kPlayerLeft = 67,
 		kPlayerStateUpdate = 68,
 		kChatBroadcast = 69,
+		kPlayerRenamed = 70,
 	};
 
 	inline void WriteVec3(Writer& w, const Vec3& v)
@@ -131,6 +133,22 @@ namespace f4mp
 		bool Read(Reader& r)
 		{
 			text = r.Str();
+			return r.Ok();
+		}
+	};
+
+	// The character got (re)named after connecting, e.g. in the character creator.
+	struct SetNameMsg
+	{
+		static constexpr auto ID = MsgId::kSetName;
+
+		std::string name;
+
+		void Write(Writer& w) const { w.Str(name); }
+
+		bool Read(Reader& r)
+		{
+			name = r.Str();
 			return r.Ok();
 		}
 	};
@@ -253,6 +271,27 @@ namespace f4mp
 		{
 			from = r.U32();
 			text = r.Str();
+			return r.Ok();
+		}
+	};
+
+	struct PlayerRenamedMsg
+	{
+		static constexpr auto ID = MsgId::kPlayerRenamed;
+
+		PlayerId id{ INVALID_PLAYER_ID };
+		std::string name;
+
+		void Write(Writer& w) const
+		{
+			w.U32(id);
+			w.Str(name);
+		}
+
+		bool Read(Reader& r)
+		{
+			id = r.U32();
+			name = r.Str();
 			return r.Ok();
 		}
 	};

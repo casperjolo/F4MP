@@ -79,6 +79,7 @@ namespace f4mp::server
 		void HandleHello(Player& a_player, Reader& a_reader);
 		void HandlePlayerState(Player& a_player, Reader& a_reader);
 		void HandleChat(Player& a_player, Reader& a_reader);
+		void HandleSetName(Player& a_player, Reader& a_reader);
 
 		void Send(ENetPeer* a_peer, Channel a_channel, const std::vector<std::uint8_t>& a_bytes);
 		void Broadcast(Channel a_channel, const std::vector<std::uint8_t>& a_bytes, const Player* a_except = nullptr);

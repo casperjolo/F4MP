@@ -56,6 +56,11 @@ namespace f4mp::client
 			return false;
 		}
 
+		// Loading screens stall the game thread (and this pump) for a long time; ENet's default
+		// 5 s / 30 s patience would drop the connection on every cell load. The server uses the
+		// same values for its side.
+		enet_peer_timeout(_peer, 0, 60000, 180000);
+
 		_state = State::kConnecting;
 		_connectStart = std::chrono::steady_clock::now();
 		REX::LogInformation("Connecting to {}:{}"sv, a_host, a_port);

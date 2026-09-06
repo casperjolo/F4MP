@@ -56,6 +56,7 @@ namespace f4mp::client
 			HelloMsg hello;
 			hello.gameVersion = F4SE::GetRuntimeVersion().Pack<std::uint32_t>();
 			hello.name = _config.playerName.empty() ? game::GetPlayerName() : _config.playerName;
+			_sentName = hello.name;
 			_net.Send(Channel::kReliable, Encode(hello));
 		};
 
@@ -135,8 +136,27 @@ namespace f4mp::client
 
 		if (IsConnected()) {
 			SendState(false);
+			SyncName();
 			_remotes.Update();
 		}
+	}
+
+	// A new character has no name until the SPECIAL form; tell the server when it changes.
+	void Session::SyncName()
+	{
+		constexpr auto NAME_CHECK_INTERVAL = std::chrono::seconds(2);
+		const auto now = std::chrono::steady_clock::now();
+		if (now - _lastNameCheck < NAME_CHECK_INTERVAL) {
+			return;
+		}
+		_lastNameCheck = now;
+
+		const auto name = _config.playerName.empty() ? game::GetPlayerName() : _config.playerName;
+		if (name == _sentName) {
+			return;
+		}
+		_sentName = name;
+		_net.Send(Channel::kReliable, Encode(SetNameMsg{ name }));
 	}
 
 	void Session::SendState(bool a_force)
@@ -250,7 +270,8 @@ namespace f4mp::client
 	void Session::SetPlayerName(std::string_view a_name)
 	{
 		_config.playerName = SanitizeName(std::string(a_name));
-		game::ConsolePrint("[F4MP] Name set to \"" + _config.playerName + "\" (applies on the next connect).");
+		game::ConsolePrint("[F4MP] Name set to \"" + _config.playerName + "\".");
+		_lastNameCheck = {}; // picked up by SyncName on the next frame
 	}
 
 	void Session::PrintStatus() const
@@ -352,6 +373,21 @@ namespace f4mp::client
 			PlayerLeftMsg msg;
 			if (msg.Read(reader)) {
 				_remotes.Remove(msg.id);
+			}
+			break;
+		}
+
+		case MsgId::kPlayerRenamed: {
+			PlayerRenamedMsg msg;
+			if (!msg.Read(reader)) {
+				return;
+			}
+			if (msg.id == _myId) {
+				Print("[F4MP] You are now known as " + msg.name);
+			} else {
+				const auto old = _remotes.NameOf(msg.id);
+				_remotes.Rename(msg.id, msg.name);
+				Print("[F4MP] " + old + " is now known as " + msg.name);
 			}
 			break;
 		}

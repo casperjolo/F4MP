@@ -41,6 +41,7 @@ namespace f4mp::client
 		void SetInterpDelay(float a_milliseconds) noexcept { _interpDelayMs = a_milliseconds; }
 
 		void Add(PlayerId a_id, std::string a_name);
+		void Rename(PlayerId a_id, std::string a_name);
 		void Remove(PlayerId a_id);
 		void ApplyState(PlayerId a_id, const PlayerState& a_state);
 

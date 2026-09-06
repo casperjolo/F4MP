@@ -37,6 +37,18 @@ namespace f4mp::client
 		REX::LogInformation("Remote player #{} \"{}\" added"sv, a_id, player.name);
 	}
 
+	void RemotePlayers::Rename(PlayerId a_id, std::string a_name)
+	{
+		const auto it = _players.find(a_id);
+		if (it == _players.end()) {
+			Add(a_id, std::move(a_name));
+			return;
+		}
+		it->second.name = std::move(a_name);
+		game::RenameCloneBase(it->second.base, it->second.name);
+		REX::LogInformation("Remote player #{} renamed to \"{}\""sv, a_id, it->second.name);
+	}
+
 	void RemotePlayers::Remove(PlayerId a_id)
 	{
 		const auto it = _players.find(a_id);
