@@ -110,6 +110,13 @@ namespace f4mp::client
 		auto ref = a_player.actor.get();
 		RE::Actor* actor = ref ? ref->As<RE::Actor>() : nullptr;
 
+		// Never, under any circumstance, drive the local player as if it were a clone.
+		if (actor && actor == RE::PlayerCharacter::GetSingleton()) {
+			REX::LogError("Remote #{} resolved to the local player; dropping the handle"sv, a_player.id);
+			a_player.actor.reset();
+			actor = nullptr;
+		}
+
 		// Tear down the actor when the remote player is somewhere we cannot see.
 		if (actor && (!visible || !a_player.actorSpace.SameArea(targetSpace))) {
 			game::Despawn(a_player.actor);

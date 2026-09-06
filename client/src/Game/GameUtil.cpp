@@ -153,9 +153,10 @@ namespace f4mp::client::game
 		data.object = a_base;
 		data.interior = interior;
 		data.world = world;
-		// Placing "at" the player, like Papyrus PlaceAtMe does with its self reference, so the
-		// engine attaches the new actor to the same loaded cell instance.
-		data.reference = GetPlayer();
+		// NOTE: NEW_REFR_DATA::reference is *not* an anchor. When it is set the engine
+		// initialises that existing reference instead of creating one; setting it to the
+		// player made the "clone" the local player, who then got flown around in orbit.
+		data.reference = nullptr;
 		// Mirror the Papyrus PlaceAtMe native exactly: of all the flag bytes it sets only
 		// clearStillLoadingFlag (FO4_Wrld's decompilation: "NEW_REFR_DATA flags = 0x1000000
 		// only"). A new reference stays marked "still loading" until its creator clears the
@@ -166,8 +167,12 @@ namespace f4mp::client::game
 		data.initializeScripts = false;
 		data.initiallyDisabled = false;
 
-		const auto handle = handler->CreateReferenceAtLocation(data);
+		auto handle = handler->CreateReferenceAtLocation(data);
 		if (auto ref = handle.get()) {
+			if (ref.get() == RE::PlayerCharacter::GetSingleton()) {
+				REX::LogError("SpawnPlayerClone: the engine handed back the local player; refusing to drive it"sv);
+				return {};
+			}
 			REX::LogInformation("Placed 0x{:08X} from 0x{:08X} in cell 0x{:08X}"sv,
 				ref->GetFormID(), a_base->GetFormID(), ref->GetParentCell() ? ref->GetParentCell()->GetFormID() : 0u);
 		}
@@ -219,8 +224,12 @@ namespace f4mp::client::game
 	void Despawn(RE::ObjectRefHandle& a_handle)
 	{
 		if (auto ref = a_handle.get()) {
-			ref->Disable();
-			ref->SetDelete(true);
+			if (ref.get() == RE::PlayerCharacter::GetSingleton()) {
+				REX::LogError("Despawn: refusing to disable the local player"sv);
+			} else {
+				ref->Disable();
+				ref->SetDelete(true);
+			}
 		}
 		a_handle.reset();
 	}
