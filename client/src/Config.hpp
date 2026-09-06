@@ -23,6 +23,9 @@ namespace f4mp::client
 		bool chargen{ true };
 		std::int32_t chargenMode{ 0 }; // 0: ask for the sex, then face; 1: face only
 
+		// [Sync] NPC record remote players' clones are copied from.
+		RE::TESFormID cloneBase{ 0x00000007 };
+
 		std::filesystem::path path;
 
 		// Reads Data/F4SE/Plugins/F4MP.ini; missing file or keys fall back to defaults.

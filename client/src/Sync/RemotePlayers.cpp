@@ -120,7 +120,7 @@ namespace f4mp::client
 			a_player.lastSpawnAttempt = a_now;
 
 			if (!a_player.base && !a_player.baseFailed) {
-				a_player.base = game::CreateCloneBase(a_player.name);
+				a_player.base = game::CreateCloneBase(_baseFormId, a_player.name);
 				a_player.baseFailed = a_player.base == nullptr;
 			}
 			if (!a_player.base) {
@@ -194,6 +194,21 @@ namespace f4mp::client
 		for (auto& [id, player] : _players) {
 			game::Despawn(player.actor);
 		}
+	}
+
+	void RemotePlayers::SetCloneBase(RE::TESFormID a_formId)
+	{
+		_baseFormId = a_formId;
+		DespawnAll();
+		for (auto& [id, player] : _players) {
+			player.base = nullptr; // the old dynamic copy is simply left behind
+			player.baseFailed = false;
+			player.actorDead = false;
+			player.actorPacified = false;
+			player.appliedFlags = kStateNone;
+			player.lastSpawnAttempt = {};
+		}
+		REX::LogInformation("Clone base set to 0x{:08X}; clones respawn"sv, a_formId);
 	}
 
 	void RemotePlayers::ForgetActors()

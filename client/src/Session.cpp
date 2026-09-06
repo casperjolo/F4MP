@@ -5,6 +5,7 @@
 #include "Game/GameUtil.hpp"
 
 #include <charconv>
+#include <format>
 
 namespace f4mp::client
 {
@@ -42,6 +43,7 @@ namespace f4mp::client
 	{
 		_config = std::move(a_config);
 		_remotes.SetInterpDelay(_config.interpDelayMs);
+		_remotes.SetCloneBase(_config.cloneBase);
 
 		PrologueSkip::Settings skip;
 		skip.enabled = _config.skipPrologue;
@@ -272,6 +274,60 @@ namespace f4mp::client
 		_config.playerName = SanitizeName(std::string(a_name));
 		game::ConsolePrint("[F4MP] Name set to \"" + _config.playerName + "\".");
 		_lastNameCheck = {}; // picked up by SyncName on the next frame
+	}
+
+	void Session::SetCloneBase(RE::TESFormID a_formId)
+	{
+		_remotes.SetCloneBase(a_formId);
+		game::ConsolePrint(std::format("[F4MP] Clone base set to 0x{:08X}; clones respawn.", a_formId));
+	}
+
+	void Session::PrintDebug() const
+	{
+		auto* local = game::GetPlayer();
+		game::ConsolePrint(std::format("[F4MP] clone base 0x{:08X}, {} remote(s), interp {} ms",
+			_remotes.GetCloneBase(), _remotes.Count(), _config.interpDelayMs));
+
+		if (local) {
+			auto* base = local->GetActorBase();
+			game::ConsolePrint(std::format("  you: base 0x{:08X} heads {} skin 0x{:08X} sex {} 3D {} alpha {:.2f}",
+				base ? base->GetFormID() : 0u,
+				base ? base->GetHeadParts().size() : 0u,
+				base && base->formSkin ? base->formSkin->GetFormID() : 0u,
+				base ? static_cast<int>(base->GetSex()) : -1,
+				local->Is3DLoaded(), local->GetAlpha()));
+		}
+
+		for (const auto& [id, p] : _remotes.All()) {
+			auto ref = p.actor.get();
+			auto* actor = ref ? ref->As<RE::Actor>() : nullptr;
+			if (!actor) {
+				game::ConsolePrint(std::format("  #{} {}: state {} base {} baseFailed {} actor none",
+					id, p.name, p.hasState, p.base ? std::format("0x{:08X}", p.base->GetFormID()) : "none", p.baseFailed));
+				continue;
+			}
+
+			auto* node = actor->Get3D();
+			auto* base = actor->GetActorBase();
+			const auto pos = actor->GetPosition();
+			float dist = -1.0f;
+			if (local) {
+				const auto lp = local->GetPosition();
+				dist = std::sqrt((pos.x - lp.x) * (pos.x - lp.x) + (pos.y - lp.y) * (pos.y - lp.y) + (pos.z - lp.z) * (pos.z - lp.z));
+			}
+			auto* cell = actor->GetParentCell();
+
+			game::ConsolePrint(std::format("  #{} {}: actor 0x{:08X} base 0x{:08X} 3Dloaded {} node {} nodeFlags 0x{:X} alpha {:.2f} ghost {} disabled {} dead {} pacified {}",
+				id, p.name, actor->GetFormID(), base ? base->GetFormID() : 0u,
+				actor->Is3DLoaded(), node != nullptr, node ? node->flags.underlying() : 0ull,
+				actor->GetAlpha(), actor->GetGhost(), actor->IsDisabled(), actor->IsDead(true), p.actorPacified));
+			game::ConsolePrint(std::format("      pos ({:.0f}, {:.0f}, {:.0f}) dist {:.0f} cell 0x{:08X} heads {} skin 0x{:08X} sex {} flags 0x{:X}",
+				pos.x, pos.y, pos.z, dist, cell ? cell->GetFormID() : 0u,
+				base ? base->GetHeadParts().size() : 0u,
+				base && base->formSkin ? base->formSkin->GetFormID() : 0u,
+				base ? static_cast<int>(base->GetSex()) : -1,
+				static_cast<std::uint32_t>(actor->GetFormFlags())));
+		}
 	}
 
 	void Session::PrintStatus() const

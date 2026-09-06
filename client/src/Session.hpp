@@ -37,8 +37,11 @@ namespace f4mp::client
 		// Console helpers. SetServer accepts "host" or "host:port"; false if the port is bad.
 		bool SetServer(std::string_view a_hostPort);
 		void SetPlayerName(std::string_view a_name);
+		void SetCloneBase(RE::TESFormID a_formId);
 		void PrintStatus() const;
 		void PrintPlayers() const;
+		// Engine-level facts about every clone (3D loaded, hidden, alpha, ghost, base record...).
+		void PrintDebug() const;
 
 		[[nodiscard]] bool IsConnected() const noexcept { return _net.IsConnected() && _welcomed; }
 

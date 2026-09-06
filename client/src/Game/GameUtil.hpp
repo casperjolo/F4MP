@@ -41,7 +41,7 @@ namespace f4mp::client::game
 	// remote name (so it shows on the crosshair), is a ghost (combat AI ignores it and it takes
 	// no damage) and has no aggression, so the engine never fights the network-driven position.
 	// Dynamic forms do not survive loading a save: drop the pointer in OnLeaveWorld/OnEnterWorld.
-	[[nodiscard]] RE::TESNPC* CreateCloneBase(const std::string& a_name);
+	[[nodiscard]] RE::TESNPC* CreateCloneBase(RE::TESFormID a_source, const std::string& a_name);
 	void RenameCloneBase(RE::TESNPC* a_base, const std::string& a_name);
 
 	// Spawns a clone of a_base at the given spot. Returns an empty handle on failure.

@@ -85,11 +85,11 @@ namespace f4mp::client::game
 
 	// ---- clone base form -------------------------------------------------------------
 
-	RE::TESNPC* CreateCloneBase(const std::string& a_name)
+	RE::TESNPC* CreateCloneBase(RE::TESFormID a_source, const std::string& a_name)
 	{
-		auto* source = RE::TESForm::FindFormByID<RE::TESNPC>(PLAYER_BASE_FORM_ID);
+		auto* source = RE::TESForm::FindFormByID<RE::TESNPC>(a_source);
 		if (!source) {
-			REX::LogError("CreateCloneBase: player base form 0x{:08X} missing"sv, PLAYER_BASE_FORM_ID);
+			REX::LogError("CreateCloneBase: NPC form 0x{:08X} missing"sv, a_source);
 			return nullptr;
 		}
 
@@ -110,7 +110,9 @@ namespace f4mp::client::game
 		npc->aiData.useAggroRadius = 0;
 
 		RenameCloneBase(npc, a_name);
-		REX::LogInformation("Created clone base 0x{:08X} \"{}\""sv, npc->GetFormID(), a_name);
+		REX::LogInformation("Created clone base 0x{:08X} \"{}\" from 0x{:08X} (heads {}, skin 0x{:08X}, sex {})"sv,
+			npc->GetFormID(), a_name, a_source, npc->GetHeadParts().size(),
+			npc->formSkin ? npc->formSkin->GetFormID() : 0u, npc->GetSex());
 		return npc;
 	}
 

@@ -6,6 +6,7 @@
 #include "Session.hpp"
 
 #include <cctype>
+#include <charconv>
 
 namespace f4mp::client::console
 {
@@ -90,6 +91,8 @@ namespace f4mp::client::console
 			game::ConsolePrint("  f4mp list                    players on the server");
 			game::ConsolePrint("  f4mp name <name>             change your name");
 			game::ConsolePrint("  f4mp unstick                 restore controls, HUD and camera after a menu froze you");
+			game::ConsolePrint("  f4mp debug                   engine facts about every clone (3D, alpha, base record)");
+			game::ConsolePrint("  f4mp clonebase <hex id>      NPC record to copy clones from (default 7), respawns them");
 		}
 
 		bool ExecuteCommand(
@@ -176,6 +179,20 @@ namespace f4mp::client::console
 		} else if (IEquals(cmd, "unstick")) {
 			game::RestorePlayerControl();
 			game::ConsolePrint("[F4MP] Controls, HUD and camera restored.");
+		} else if (IEquals(cmd, "debug")) {
+			session.PrintDebug();
+		} else if (IEquals(cmd, "clonebase")) {
+			auto text = StripQuotes(args);
+			if (text.size() > 2 && (text.substr(0, 2) == "0x" || text.substr(0, 2) == "0X")) {
+				text.remove_prefix(2);
+			}
+			unsigned long id = 0;
+			const auto res = std::from_chars(text.data(), text.data() + text.size(), id, 16);
+			if (text.empty() || res.ec != std::errc{} || res.ptr != text.data() + text.size()) {
+				game::ConsolePrint("[F4MP] Usage: f4mp clonebase <NPC form id in hex, e.g. 7 or A7D34>");
+				return;
+			}
+			session.SetCloneBase(static_cast<RE::TESFormID>(id));
 		} else {
 			game::ConsolePrint("[F4MP] Unknown command \"" + std::string(cmd) + "\"");
 			Usage();

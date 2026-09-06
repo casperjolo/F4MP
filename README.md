@@ -58,6 +58,8 @@ Open the console with `~` and use the `f4mp` command:
 | `f4mp list` | Everyone on the server and whether they are in view |
 | `f4mp name <name>` | Change your name |
 | `f4mp unstick` | Restore controls, HUD and camera if a menu left you frozen |
+| `f4mp debug` | Engine facts about every clone: 3D loaded, hidden flags, alpha, base record |
+| `f4mp clonebase <hex id>` | NPC record clones are copied from (default `7`, the player record); respawns them |
 | `f4mp help` | This list |
 
 ### New game: straight to Vault 111

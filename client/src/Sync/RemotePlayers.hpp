@@ -40,6 +40,10 @@ namespace f4mp::client
 	public:
 		void SetInterpDelay(float a_milliseconds) noexcept { _interpDelayMs = a_milliseconds; }
 
+		// NPC record the clones are copied from. Changing it respawns every clone.
+		void SetCloneBase(RE::TESFormID a_formId);
+		[[nodiscard]] RE::TESFormID GetCloneBase() const noexcept { return _baseFormId; }
+
 		void Add(PlayerId a_id, std::string a_name);
 		void Rename(PlayerId a_id, std::string a_name);
 		void Remove(PlayerId a_id);
@@ -68,5 +72,6 @@ namespace f4mp::client
 
 		std::unordered_map<PlayerId, RemotePlayer> _players;
 		float _interpDelayMs{ 100.0f };
+		RE::TESFormID _baseFormId{ game::PLAYER_BASE_FORM_ID };
 	};
 }

@@ -48,6 +48,14 @@ namespace f4mp::client
 			}
 		}
 
+		if (const auto text = ini.Get("Sync", "CloneBase"); !text.empty()) {
+			try {
+				cfg.cloneBase = static_cast<RE::TESFormID>(std::stoul(text, nullptr, 16));
+			} catch (...) {
+				REX::LogWarning("Config: [Sync] CloneBase \"{}\" is not a hex form id, keeping 0x{:08X}"sv, text, cfg.cloneBase);
+			}
+		}
+
 		REX::LogInformation("Config: host={} port={} autoConnect={} sendRate={} interpDelay={}ms name=\"{}\""sv,
 			cfg.host, cfg.port, cfg.autoConnect, cfg.sendRate, cfg.interpDelayMs, cfg.playerName);
 		REX::LogInformation("Config: skipPrologue={} skipDelay={}s podTimeout={}s chargen={} chargenMode={} skipCommands={}"sv,
