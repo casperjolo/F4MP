@@ -1,0 +1,7 @@
+// F4MP compatibility stand-in for <flat_map>.
+//
+// MSVC 14.44 (Visual Studio 2022 17.14) ships no <flat_map>; it arrived with the VS 2026 STL.
+// CommonLibF4 includes the header from its precompiled header but never uses std::flat_map,
+// so an empty header is enough. client/CMakeLists.txt only adds this directory to the include
+// path when the real header is missing, so on VS 2026 this file is never seen.
+#pragma once

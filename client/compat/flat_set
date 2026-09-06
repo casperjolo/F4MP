@@ -1,0 +1,2 @@
+// F4MP compatibility stand-in for <flat_set>. See flat_map in this directory.
+#pragma once
