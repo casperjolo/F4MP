@@ -36,10 +36,10 @@ namespace f4mp::client
 		enum class State
 		{
 			kIdle,
-			kArmed,      // new game started, waiting for the prologue quest to start
-			kRunning,    // executing the command list
-			kWaitForPod, // commands done, waiting for the player to leave the cryo pod
-			kSexChoice,   // male/female message box is up
+			kArmed,       // new game started, waiting for the prologue quest to start
+			kSexChoice,   // male/female message box is up (still in the bathroom)
+			kRunning,     // executing the command list
+			kWaitForPod,  // commands done, waiting for the player to leave the cryo pod
 			kFaceMenu,    // race menu requested, waiting for it to close
 			kSpecialMenu, // name + SPECIAL form requested, waiting for it to close
 			kDone
@@ -48,10 +48,11 @@ namespace f4mp::client
 		using Clock = std::chrono::steady_clock;
 
 		void Start();
-		// Returns false when it stopped for a wait or because the list is exhausted.
-		bool RunNextCommand();
 		void AskSex();
 		void ApplySexChoice(int a_choice);
+		void BeginCommands();
+		// Returns false when it stopped for a wait or because the list is exhausted.
+		bool RunNextCommand();
 		void OpenFaceMenu();
 		void OpenSpecialMenu();
 		void Finish(std::string_view a_why);

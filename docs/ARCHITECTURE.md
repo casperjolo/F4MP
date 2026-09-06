@@ -44,19 +44,26 @@ has really started, so it waits for `MQ101` ("War Never Changes", form `0001ED86
 the player into the 2287 vault with the Kellogg scene skipped and opens the pod, plus dropping
 the pre-war music. (Verified in-game on 1.11.240: stage 900 alone does the whole job.)
 
+Still in the bathroom, a stock message box asks Male/Female and, if that differs from the current
+character, the `player.sexchange` console command flips it; the skip waits for the rebuilt 3D to
+load before going on. This must happen *before* the teleport: the sex change rebuilds the whole
+actor, and doing it during the pod wake-up scene (as an earlier version did) left that scene
+waiting for animation events forever, with its input layer, chargen HUD mode and furniture state
+stuck in the save.
+
 It then polls the quests: `MQ102` ("Out of Time", form `0001CC2A`) reaching stage 1, or `MQ101`
-reaching 1000, means the player is out of the pod. The character creator then runs in three
-steps: a stock message box asks Male/Female and, if that differs from the current character, the
-`player.sexchange` console command flips it; `Game.ShowRaceMenu(player, 1)` is dispatched through
-the Papyrus VM (`GameVM::GetVMInterface()->InvokeStaticFunction`) for the face (mode 0, the
-start-of-game variant with the sex toggle, needs the two pre-war spouse actors loaded side by
-side, and they are unloaded by 2287); and when `LooksMenu` closes, `Game.ShowSPECIALMenu()` for
-the name and SPECIAL form. After a sex change it waits for the player's 3D to finish rebuilding
-before opening the face editor. When the SPECIAL form closes it calls
-`game::RestorePlayerControl()` (`EnablePlayerControls`, `Game.SetInChargen(false)`, show
-`HUDMenu`, `Game.ForceFirstPerson`), because those menus normally sit inside quest scripts that
-do this and otherwise leave the player frozen with no HUD; `f4mp unstick` runs the same by hand.
-Every step is written to `F4MP.log` with a "Prologue skip:" prefix.
+reaching 1000, means the player is out of the pod. `Game.ShowRaceMenu(player, 1)` is dispatched
+through the Papyrus VM (`GameVM::GetVMInterface()->InvokeStaticFunction`) for the face (mode 0,
+the start-of-game variant with the sex toggle, needs the two pre-war spouse actors loaded side by
+side, and they are unloaded by 2287), and when `LooksMenu` closes, `Game.ShowSPECIALMenu()` for
+the name and SPECIAL form. When that closes, `game::RestorePlayerControl()` undoes everything the
+prologue scripts (read out of `Fallout4 - Misc.ba2`: `QF_MQ101_0001ED86`, `MQ101PlayerScript`)
+leave behind: every `BSInputEnableManager` layer gets all user/other events re-enabled (Papyrus
+`InputEnableLayer`s persist in saves and the console's `EnablePlayerControls` ignores them),
+`Game.SetInCharGen(false, false, false)`, `Game.SetCharGenHUDMode(0)` (the hidden HUD),
+`player.ChangeAnimArchetype` (the shivering walk), `Game.ForceFirstPerson`, and `HUDMenu` shown.
+`f4mp unstick` runs the same recovery by hand. Every step is written to `F4MP.log` with a
+"Prologue skip:" prefix.
 
 Because the character has no name until that form, the session re-reads the character name
 every two seconds and sends `SetName` when it changes; the server answers with `PlayerRenamed`

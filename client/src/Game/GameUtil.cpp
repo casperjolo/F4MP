@@ -197,20 +197,41 @@ namespace f4mp::client::game
 
 	void RestorePlayerControl()
 	{
-		RE::Script::ExecuteSingleLineConsoleCommand("EnablePlayerControls", nullptr, true);
+		// 1. Input enable layers. Quest scripts disable movement etc. through persistent layers
+		//    (InputEnableLayer in Papyrus) that survive saves and that the console command
+		//    EnablePlayerControls does not touch. Re-enable every event on every layer.
+		std::size_t layers = 0;
+		if (auto* input = RE::BSInputEnableManager::GetSingleton()) {
+			for (const auto& layer : input->layerWrappers) {
+				if (!layer) {
+					continue;
+				}
+				const auto id = layer->GetLayerID();
+				input->EnableUserEvent(id, RE::UserEvents::USER_EVENT_FLAG::kAll, true, RE::UserEvents::SENDER_ID::kScript);
+				input->EnableOtherEvent(id, RE::OtherInputEvents::OTHER_EVENT_FLAG::kAll, true, RE::UserEvents::SENDER_ID::kScript);
+				++layers;
+			}
+		}
 
+		// 2. Legacy control flags and the prologue's "shivering walk" animation archetype.
+		RE::Script::ExecuteSingleLineConsoleCommand("EnablePlayerControls", nullptr, true);
+		RE::Script::ExecuteSingleLineConsoleCommand("player.ChangeAnimArchetype", nullptr, true);
+
+		// 3. Chargen state: saving/waiting locks and the HUD mode that hides the HUD.
 		if (auto vm = RE::GameVM::GetVMInterface()) {
 			using Callback = RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor>;
-			vm->InvokeStaticFunction(RE::BSFixedString("Game"), RE::BSFixedString("SetInChargen"), Callback{}, false, false, false);
+			vm->InvokeStaticFunction(RE::BSFixedString("Game"), RE::BSFixedString("SetInCharGen"), Callback{}, false, false, false);
+			vm->InvokeStaticFunction(RE::BSFixedString("Game"), RE::BSFixedString("SetCharGenHUDMode"), Callback{}, static_cast<std::int32_t>(0));
 			vm->InvokeStaticFunction(RE::BSFixedString("Game"), RE::BSFixedString("ForceFirstPerson"), Callback{});
 		}
 
+		// 4. The HUD menu itself, in case it was closed rather than just hidden.
 		auto* ui = RE::UI::GetSingleton();
 		auto* queue = RE::UIMessageQueue::GetSingleton();
 		if (ui && queue && !ui->IsMenuOpen(RE::BSFixedString("HUDMenu")).value_or(true)) {
 			queue->AddMessage(RE::BSFixedString("HUDMenu"), RE::UI_MESSAGE_TYPE::kShow);
 		}
 
-		REX::LogInformation("Restored player controls, chargen flags, HUD and camera"sv);
+		REX::LogInformation("Restored player control: {} input layer(s) re-enabled, chargen flags cleared, HUD mode reset, first person"sv, layers);
 	}
 }
