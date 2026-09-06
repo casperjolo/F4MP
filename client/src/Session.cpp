@@ -351,6 +351,10 @@ namespace f4mp::client
 				static_cast<std::uint32_t>(actor->GetFormFlags()),
 				actor->currentProcess ? static_cast<int>(actor->currentProcess->processLevel) : -1,
 				actor->niFlags.underlying()));
+			game::ConsolePrint(std::format("      inGameFlags 0x{:X} lifeState {} weaponState {} sneaking {} sprinting {} sitSleep {}",
+				actor->inGameFormFlags.underlying(), static_cast<int>(actor->lifeState),
+				static_cast<int>(actor->weaponState), static_cast<unsigned>(actor->sneaking),
+				static_cast<unsigned>(actor->sprinting), static_cast<int>(actor->sitSleepState)));
 		}
 	}
 

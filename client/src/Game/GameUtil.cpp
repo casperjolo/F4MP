@@ -153,10 +153,25 @@ namespace f4mp::client::game
 		data.object = a_base;
 		data.interior = interior;
 		data.world = world;
+		// Placing "at" the player, like Papyrus PlaceAtMe does with its self reference, so the
+		// engine attaches the new actor to the same loaded cell instance.
+		data.reference = GetPlayer();
+		// Mirror the Papyrus PlaceAtMe native exactly: of all the flag bytes it sets only
+		// clearStillLoadingFlag (FO4_Wrld's decompilation: "NEW_REFR_DATA flags = 0x1000000
+		// only"). A new reference stays marked "still loading" until its creator clears the
+		// mark, and a still-loading actor never starts updating: no fade-in, no animation
+		// graph, no movement. That was the T-pose.
 		data.forcePersist = false;
-		data.initializeScripts = true;
+		data.clearStillLoadingFlag = true;
+		data.initializeScripts = false;
+		data.initiallyDisabled = false;
 
-		return handler->CreateReferenceAtLocation(data);
+		const auto handle = handler->CreateReferenceAtLocation(data);
+		if (auto ref = handle.get()) {
+			REX::LogInformation("Placed 0x{:08X} from 0x{:08X} in cell 0x{:08X}"sv,
+				ref->GetFormID(), a_base->GetFormID(), ref->GetParentCell() ? ref->GetParentCell()->GetFormID() : 0u);
+		}
+		return handle;
 	}
 
 	void ApplyCloneIdentity(RE::TESObjectREFR* a_ref, const std::string& a_name, bool a_ghost)
