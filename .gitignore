@@ -1,0 +1,25 @@
+# Build output
+build/
+out/
+*.dll
+*.pdb
+*.exe
+*.ilk
+*.obj
+*.log
+
+# vcpkg
+vcpkg_installed/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+CMakeUserPresets.json
+compile_commands.json
+.cache/
+
+# Windows folder metadata
+desktop.ini
