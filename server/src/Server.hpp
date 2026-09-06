@@ -31,6 +31,25 @@ namespace f4mp::server
 		std::uint32_t chatWindowCount{ 0 };
 	};
 
+	// A fake player driven by the server, so clone rendering can be tested with one real client.
+	// Clients cannot tell it from a real player: it joins, leaves and sends state like anyone else.
+	struct Bot
+	{
+		enum class Mode
+		{
+			kMirror, // shadows a real player with a fixed world-space offset, copying their flags
+			kOrbit   // walks in a circle around a real player (tests interpolation)
+		};
+
+		PlayerId id{ INVALID_PLAYER_ID };
+		std::string name;
+		Mode mode{ Mode::kMirror };
+		PlayerId follow{ INVALID_PLAYER_ID }; // the real player it derives its state from
+		bool hasState{ false };
+		PlayerState state{};
+		float phase{ 0.0f }; // orbit angle in radians
+	};
+
 	class Server
 	{
 	public:
@@ -43,10 +62,10 @@ namespace f4mp::server
 		[[nodiscard]] bool Start();
 		void Stop();
 
-		// Services the network for up to a_timeoutMs milliseconds. Call from the main loop.
+		// Services the network for up to a_timeoutMs milliseconds, then advances bots. Call from the main loop.
 		void Service(std::uint32_t a_timeoutMs);
 
-		// Console commands (help, list, say, kick).
+		// Console commands (help, list, say, kick, bot).
 		void ExecuteCommand(const std::string& a_line);
 
 		[[nodiscard]] const Config& GetConfig() const noexcept { return _config; }
@@ -68,10 +87,17 @@ namespace f4mp::server
 
 		[[nodiscard]] Player* FindPlayer(ENetPeer* a_peer);
 		[[nodiscard]] Player* FindPlayer(PlayerId a_id);
+		[[nodiscard]] Player* FirstPlayerWithState();
+
+		PlayerId AddBot(Bot::Mode a_mode, std::string a_name);
+		bool RemoveBot(PlayerId a_id);
+		void UpdateBots();
 
 		Config _config;
 		ENetHost* _host{ nullptr };
 		std::unordered_map<ENetPeer*, std::unique_ptr<Player>> _players;
+		std::vector<Bot> _bots;
+		std::chrono::steady_clock::time_point _lastBotUpdate{};
 		PlayerId _nextId{ 1 };
 	};
 }

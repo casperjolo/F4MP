@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 #include <sstream>
 
 namespace f4mp::server
@@ -13,6 +14,11 @@ namespace f4mp::server
 	{
 		constexpr auto CHAT_WINDOW = std::chrono::seconds(5);
 		constexpr std::uint32_t CHAT_BURST = 6;
+
+		constexpr auto BOT_UPDATE_INTERVAL = std::chrono::milliseconds(50); // 20 Hz, like a client
+		constexpr float BOT_MIRROR_OFFSET = 200.0f;                          // game units east of the player (~3 m)
+		constexpr float BOT_ORBIT_RADIUS = 250.0f;
+		constexpr float BOT_ORBIT_SPEED = 0.6f;                              // radians per second (~10 s per lap)
 
 		bool Finite(const Vec3& a_v) noexcept
 		{
@@ -124,6 +130,8 @@ namespace f4mp::server
 				break;
 			}
 		}
+
+		UpdateBots();
 	}
 
 	// ---- connection lifecycle ---------------------------------------------
@@ -234,6 +242,12 @@ namespace f4mp::server
 				Send(a_player.peer, Channel::kReliable, Encode(PlayerStateUpdateMsg{ other->id, other->state }));
 			}
 		}
+		for (const auto& bot : _bots) {
+			Send(a_player.peer, Channel::kReliable, Encode(PlayerJoinedMsg{ bot.id, bot.name }));
+			if (bot.hasState) {
+				Send(a_player.peer, Channel::kReliable, Encode(PlayerStateUpdateMsg{ bot.id, bot.state }));
+			}
+		}
 
 		Broadcast(Channel::kReliable, Encode(PlayerJoinedMsg{ a_player.id, a_player.name }), &a_player);
 		ServerChat(fmt::format("{} joined the game", a_player.name));
@@ -335,6 +349,99 @@ namespace f4mp::server
 		return nullptr;
 	}
 
+	Player* Server::FirstPlayerWithState()
+	{
+		Player* best = nullptr;
+		for (auto& [peer, player] : _players) {
+			if (player->handshaked && player->hasState && (!best || player->id < best->id)) {
+				best = player.get();
+			}
+		}
+		return best;
+	}
+
+	// ---- bots -----------------------------------------------------------------
+
+	PlayerId Server::AddBot(Bot::Mode a_mode, std::string a_name)
+	{
+		Bot bot;
+		bot.id = _nextId++;
+		bot.name = SanitizeName(a_name.empty() ? fmt::format("Bot{}", bot.id) : std::move(a_name));
+		bot.mode = a_mode;
+		_bots.push_back(bot);
+
+		spdlog::info("Bot {} (#{}) added ({})", bot.name, bot.id, a_mode == Bot::Mode::kOrbit ? "orbit" : "mirror");
+		Broadcast(Channel::kReliable, Encode(PlayerJoinedMsg{ bot.id, bot.name }));
+		ServerChat(fmt::format("{} joined the game", bot.name));
+		return bot.id;
+	}
+
+	bool Server::RemoveBot(PlayerId a_id)
+	{
+		const auto it = std::find_if(_bots.begin(), _bots.end(), [a_id](const Bot& a_bot) { return a_bot.id == a_id; });
+		if (it == _bots.end()) {
+			return false;
+		}
+
+		spdlog::info("Bot {} (#{}) removed", it->name, it->id);
+		Broadcast(Channel::kReliable, Encode(PlayerLeftMsg{ it->id }));
+		ServerChat(fmt::format("{} left the game", it->name));
+		_bots.erase(it);
+		return true;
+	}
+
+	void Server::UpdateBots()
+	{
+		if (_bots.empty()) {
+			return;
+		}
+
+		const auto now = std::chrono::steady_clock::now();
+		if (now - _lastBotUpdate < BOT_UPDATE_INTERVAL) {
+			return;
+		}
+		auto dt = std::chrono::duration<float>(now - _lastBotUpdate).count();
+		if (dt > 0.25f) { // first update, or the server stalled
+			dt = std::chrono::duration<float>(BOT_UPDATE_INTERVAL).count();
+		}
+		_lastBotUpdate = now;
+
+		constexpr auto twoPi = 2.0f * std::numbers::pi_v<float>;
+
+		for (auto& bot : _bots) {
+			// Re-attach whenever the followed player is gone or has not sent a state yet.
+			auto* target = FindPlayer(bot.follow);
+			if (!target || !target->hasState) {
+				target = FirstPlayerWithState();
+				bot.follow = target ? target->id : INVALID_PLAYER_ID;
+			}
+			if (!target) {
+				bot.hasState = false;
+				continue;
+			}
+
+			// Same cell / worldspace, flags and health as the followed player.
+			PlayerState s = target->state;
+			switch (bot.mode) {
+			case Bot::Mode::kMirror:
+				s.position.x += BOT_MIRROR_OFFSET;
+				break;
+			case Bot::Mode::kOrbit:
+				bot.phase = std::fmod(bot.phase + BOT_ORBIT_SPEED * dt, twoPi);
+				s.position.x += BOT_ORBIT_RADIUS * std::cos(bot.phase);
+				s.position.y += BOT_ORBIT_RADIUS * std::sin(bot.phase);
+				// Face the direction of travel. Game yaw is 0 = +Y and grows clockwise, so a
+				// counter-clockwise orbit has heading -phase.
+				s.yaw = std::fmod(twoPi - bot.phase, twoPi);
+				break;
+			}
+
+			bot.state = s;
+			bot.hasState = true;
+			Broadcast(Channel::kUnreliable, Encode(PlayerStateUpdateMsg{ bot.id, bot.state }));
+		}
+	}
+
 	// ---- console --------------------------------------------------------------
 
 	void Server::ExecuteCommand(const std::string& a_line)
@@ -346,9 +453,9 @@ namespace f4mp::server
 
 		const auto& cmd = args[0];
 		if (cmd == "help") {
-			spdlog::info("Commands: help, list, say <text>, kick <id> [reason], stop");
+			spdlog::info("Commands: help, list, say <text>, kick <id> [reason], bot add [mirror|orbit] [name], bot remove <id|all>, stop");
 		} else if (cmd == "list") {
-			spdlog::info("{} connection(s):", _players.size());
+			spdlog::info("{} connection(s), {} bot(s):", _players.size(), _bots.size());
 			for (const auto& [peer, player] : _players) {
 				if (!player->handshaked) {
 					spdlog::info("  (handshaking) {}", PeerAddress(peer));
@@ -358,6 +465,46 @@ namespace f4mp::server
 				spdlog::info("  #{} {} @ ({:.0f}, {:.0f}, {:.0f}) ws=0x{:08X} cell=0x{:08X} hp={:.0f}/{:.0f} ping={}ms",
 					player->id, player->name, s.position.x, s.position.y, s.position.z,
 					s.worldspaceId, s.cellId, s.health, s.maxHealth, peer->roundTripTime);
+			}
+			for (const auto& bot : _bots) {
+				const auto& s = bot.state;
+				spdlog::info("  #{} {} (bot, {}, following #{}) @ ({:.0f}, {:.0f}, {:.0f})",
+					bot.id, bot.name, bot.mode == Bot::Mode::kOrbit ? "orbit" : "mirror", bot.follow,
+					s.position.x, s.position.y, s.position.z);
+			}
+		} else if (cmd == "bot") {
+			const std::string sub = args.size() > 1 ? args[1] : "";
+			if (sub == "add") {
+				auto mode = Bot::Mode::kMirror;
+				std::size_t nameStart = 2;
+				if (args.size() > 2 && (args[2] == "mirror" || args[2] == "orbit")) {
+					mode = args[2] == "orbit" ? Bot::Mode::kOrbit : Bot::Mode::kMirror;
+					nameStart = 3;
+				}
+				std::string name;
+				for (auto i = nameStart; i < args.size(); ++i) {
+					name += (name.empty() ? "" : " ") + args[i];
+				}
+				AddBot(mode, std::move(name));
+			} else if (sub == "remove" && args.size() > 2) {
+				if (args[2] == "all") {
+					while (!_bots.empty()) {
+						RemoveBot(_bots.back().id);
+					}
+					return;
+				}
+				PlayerId id{};
+				try {
+					id = static_cast<PlayerId>(std::stoul(args[2]));
+				} catch (...) {
+					spdlog::warn("usage: bot remove <id|all>");
+					return;
+				}
+				if (!RemoveBot(id)) {
+					spdlog::warn("No bot with id {}", id);
+				}
+			} else {
+				spdlog::warn("usage: bot add [mirror|orbit] [name] | bot remove <id|all>");
 			}
 		} else if (cmd == "say") {
 			const auto pos = a_line.find(' ');
@@ -376,6 +523,9 @@ namespace f4mp::server
 				id = static_cast<PlayerId>(std::stoul(args[1]));
 			} catch (...) {
 				spdlog::warn("usage: kick <id> [reason]");
+				return;
+			}
+			if (RemoveBot(id)) {
 				return;
 			}
 			auto* player = FindPlayer(id);
