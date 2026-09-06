@@ -120,7 +120,7 @@ namespace f4mp::client
 			a_player.lastSpawnAttempt = a_now;
 
 			if (!a_player.base && !a_player.baseFailed) {
-				a_player.base = game::CreateCloneBase(_baseFormId, a_player.name);
+				a_player.base = game::CreateCloneBase(_baseFormId, a_player.name, _ghost);
 				a_player.baseFailed = a_player.base == nullptr;
 			}
 			if (!a_player.base) {
@@ -143,7 +143,7 @@ namespace f4mp::client
 		}
 
 		// The AI process appears a frame or so after spawning; keep trying until it is there.
-		if (!a_player.actorPacified) {
+		if (_pacify && !a_player.actorPacified) {
 			a_player.actorPacified = game::PacifyClone(actor);
 		}
 
@@ -151,6 +151,10 @@ namespace f4mp::client
 		// runs for a clone that is pacified and warped every frame. Keep it opaque.
 		if (actor->GetAlpha() < 1.0f) {
 			actor->SetAlpha(1.0f);
+		}
+
+		if (!_drive) {
+			return; // experiment: leave the actor entirely to the engine
 		}
 
 		// Render the remote player slightly in the past so there is always a snapshot to move towards.
@@ -202,9 +206,8 @@ namespace f4mp::client
 		}
 	}
 
-	void RemotePlayers::SetCloneBase(RE::TESFormID a_formId)
+	void RemotePlayers::Respawn()
 	{
-		_baseFormId = a_formId;
 		DespawnAll();
 		for (auto& [id, player] : _players) {
 			player.base = nullptr; // the old dynamic copy is simply left behind
@@ -214,7 +217,25 @@ namespace f4mp::client
 			player.appliedFlags = kStateNone;
 			player.lastSpawnAttempt = {};
 		}
-		REX::LogInformation("Clone base set to 0x{:08X}; clones respawn"sv, a_formId);
+		REX::LogInformation("Clones respawn (base 0x{:08X}, drive {}, pacify {}, ghost {})"sv, _baseFormId, _drive, _pacify, _ghost);
+	}
+
+	void RemotePlayers::SetCloneBase(RE::TESFormID a_formId)
+	{
+		_baseFormId = a_formId;
+		Respawn();
+	}
+
+	void RemotePlayers::SetPacify(bool a_pacify)
+	{
+		_pacify = a_pacify;
+		Respawn();
+	}
+
+	void RemotePlayers::SetGhost(bool a_ghost)
+	{
+		_ghost = a_ghost;
+		Respawn();
 	}
 
 	void RemotePlayers::ForgetActors()

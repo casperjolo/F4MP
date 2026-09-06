@@ -282,11 +282,30 @@ namespace f4mp::client
 		game::ConsolePrint(std::format("[F4MP] Clone base set to 0x{:08X}; clones respawn.", a_formId));
 	}
 
+	bool Session::SetCloneOption(std::string_view a_option, bool a_on)
+	{
+		if (a_option == "sync") {
+			_remotes.SetDrive(a_on);
+		} else if (a_option == "pacify") {
+			_remotes.SetPacify(a_on);
+		} else if (a_option == "ghost") {
+			_remotes.SetGhost(a_on);
+		} else if (a_option == "respawn") {
+			_remotes.Respawn();
+		} else {
+			return false;
+		}
+		game::ConsolePrint(std::format("[F4MP] clones: sync {} pacify {} ghost {}",
+			_remotes.GetDrive(), _remotes.GetPacify(), _remotes.GetGhost()));
+		return true;
+	}
+
 	void Session::PrintDebug() const
 	{
 		auto* local = game::GetPlayer();
-		game::ConsolePrint(std::format("[F4MP] clone base 0x{:08X}, {} remote(s), interp {} ms",
-			_remotes.GetCloneBase(), _remotes.Count(), _config.interpDelayMs));
+		game::ConsolePrint(std::format("[F4MP] clone base 0x{:08X}, {} remote(s), interp {} ms, sync {} pacify {} ghost {}",
+			_remotes.GetCloneBase(), _remotes.Count(), _config.interpDelayMs,
+			_remotes.GetDrive(), _remotes.GetPacify(), _remotes.GetGhost()));
 
 		if (local) {
 			auto* base = local->GetActorBase();
@@ -317,10 +336,11 @@ namespace f4mp::client
 			}
 			auto* cell = actor->GetParentCell();
 
-			game::ConsolePrint(std::format("  #{} {}: actor 0x{:08X} base 0x{:08X} 3Dloaded {} node {} nodeFlags 0x{:X} alpha {:.2f} ghost {} disabled {} dead {} pacified {}",
+			game::ConsolePrint(std::format("  #{} {}: actor 0x{:08X} base 0x{:08X} 3Dloaded {} node {} nodeFlags 0x{:X} alpha {:.2f} ghost {} disabled {} dead {} pacified {} boolFlags 0x{:X}",
 				id, p.name, actor->GetFormID(), base ? base->GetFormID() : 0u,
 				actor->Is3DLoaded(), node != nullptr, node ? node->flags.underlying() : 0ull,
-				actor->GetAlpha(), actor->GetGhost(), actor->IsDisabled(), actor->IsDead(true), p.actorPacified));
+				actor->GetAlpha(), actor->GetGhost(), actor->IsDisabled(), actor->IsDead(true), p.actorPacified,
+				actor->boolFlags.underlying()));
 			game::ConsolePrint(std::format("      pos ({:.0f}, {:.0f}, {:.0f}) dist {:.0f} cell 0x{:08X} heads {} skin 0x{:08X} sex {} flags 0x{:X} process {} niFlags 0x{:X}",
 				pos.x, pos.y, pos.z, dist, cell ? cell->GetFormID() : 0u,
 				base ? base->GetHeadParts().size() : 0u,

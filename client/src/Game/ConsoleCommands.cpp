@@ -102,6 +102,7 @@ namespace f4mp::client::console
 			game::ConsolePrint("  f4mp unstick                 restore controls, HUD and camera after a menu froze you");
 			game::ConsolePrint("  f4mp debug                   engine facts about every clone (3D, alpha, base record)");
 			game::ConsolePrint("  f4mp clonebase <hex id>      NPC record to copy clones from (default 7), respawns them");
+			game::ConsolePrint("  f4mp sync|pacify|ghost on|off   clone experiments; f4mp respawn recreates them");
 		}
 
 		bool ExecuteCommand(
@@ -191,6 +192,13 @@ namespace f4mp::client::console
 			game::ConsolePrint("[F4MP] Controls, HUD and camera restored.");
 		} else if (IEquals(cmd, "debug")) {
 			session.PrintDebug();
+		} else if (IEquals(cmd, "sync") || IEquals(cmd, "pacify") || IEquals(cmd, "ghost") || IEquals(cmd, "respawn")) {
+			auto value = rest;
+			const auto word = NextToken(value);
+			const bool on = !(IEquals(word, "off") || IEquals(word, "0") || IEquals(word, "false"));
+			std::string option(cmd);
+			std::transform(option.begin(), option.end(), option.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			session.SetCloneOption(option, on);
 		} else if (IEquals(cmd, "clonebase")) {
 			auto text = StripQuotes(args);
 			if (text.size() > 2 && (text.substr(0, 2) == "0x" || text.substr(0, 2) == "0X")) {

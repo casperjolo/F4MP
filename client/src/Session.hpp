@@ -38,6 +38,8 @@ namespace f4mp::client
 		bool SetServer(std::string_view a_hostPort);
 		void SetPlayerName(std::string_view a_name);
 		void SetCloneBase(RE::TESFormID a_formId);
+		// Experiment switches: "sync", "pacify", "ghost" on/off, or "respawn".
+		bool SetCloneOption(std::string_view a_option, bool a_on);
 		void PrintStatus() const;
 		void PrintPlayers() const;
 		// Engine-level facts about every clone (3D loaded, hidden, alpha, ghost, base record...).

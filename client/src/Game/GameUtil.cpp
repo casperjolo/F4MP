@@ -85,7 +85,7 @@ namespace f4mp::client::game
 
 	// ---- clone base form -------------------------------------------------------------
 
-	RE::TESNPC* CreateCloneBase(RE::TESFormID a_source, const std::string& a_name)
+	RE::TESNPC* CreateCloneBase(RE::TESFormID a_source, const std::string& a_name, bool a_ghost)
 	{
 		auto* source = RE::TESForm::FindFormByID<RE::TESNPC>(a_source);
 		if (!source) {
@@ -102,7 +102,7 @@ namespace f4mp::client::game
 
 		using Flags = RE::ACTOR_BASE_DATA::Flags;
 		auto& flags = npc->actorData.actorBaseFlags;
-		flags.set(Flags::kIsGhost);
+		flags.set(a_ghost, Flags::kIsGhost);
 		flags.reset(Flags::kUnique, Flags::kEssential, Flags::kProtected, Flags::kIsChargenFacePreset);
 
 		npc->aiData.aggression = 0;     // unaggressive
