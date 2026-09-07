@@ -49,6 +49,24 @@ dist/server/F4MPServer.exe               (+ .pdb, server.ini)
 
 Other presets: `ninja-debug`, and `vs2026` (generates `build/vs2026/F4MP.sln` for Visual Studio 2026).
 
+## Tests
+
+```bash
+ctest --test-dir build/ninja-release --output-on-failure
+```
+
+Two suites, both headless and needing neither the game nor a running server (about 16 s total):
+
+* **unit** – packet encoding, the reader's bounds checks against malformed packets, message
+  round-trips, name sanitising, INI parsing and snapshot interpolation.
+* **smoke** – launches `F4MPServer.exe` on port 27099, drives its console over stdin and talks
+  the wire protocol over a real socket: handshake, protocol-mismatch rejection, peer visibility,
+  state relay and its timestamps, NaN rejection, chat and flood control, renaming, bots, kicking.
+
+They cannot cover the client plugin's engine calls (spawning clones, animation, the prologue
+skip). That needs Fallout 4 running, which has no headless mode. Configure with
+`-DF4MP_BUILD_TESTS=OFF` to skip building them.
+
 ### Copy straight into the game
 
 Set `XSE_FO4_GAME_PATH` to your Fallout 4 folder before configuring and every build copies

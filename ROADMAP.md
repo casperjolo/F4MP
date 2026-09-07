@@ -52,3 +52,10 @@ player is a real actor, NPCs are shared, and the server is authoritative. Phases
 - [ ] Voice chat
 - [ ] Anti-cheat basics: server-side validation, rate limits, bans (so far: NaN/inf state rejection, chat flood control)
 - [ ] Linux server builds
+
+## Testing
+
+- [x] Headless test suite: protocol / packet / INI / interpolation unit tests plus an
+      end-to-end smoke test that drives a real server process (`ctest`, wired into CI)
+- [ ] Client-side engine behaviour (clone spawning, animation, prologue skip) — needs the game,
+      no headless mode exists; verified by hand

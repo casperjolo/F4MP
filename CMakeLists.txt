@@ -17,6 +17,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(F4MP_BUILD_CLIENT "Build the F4SE client plugin (F4MP.dll)" ON)
 option(F4MP_BUILD_SERVER "Build the dedicated server (F4MPServer.exe)" ON)
+option(F4MP_BUILD_TESTS "Build the headless protocol and server tests" ON)
 
 find_package(fmt CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
@@ -39,4 +40,9 @@ endif()
 
 if(F4MP_BUILD_CLIENT)
 	add_subdirectory(client)
+endif()
+
+if(F4MP_BUILD_TESTS AND F4MP_BUILD_SERVER)
+	enable_testing() # at the top level, so `ctest --test-dir build/<preset>` finds the tests
+	add_subdirectory(tests)
 endif()

@@ -48,6 +48,11 @@ jobs:
       - name: Build
         run: cmake --build --preset ninja-release
 
+      # Headless: protocol / interpolation unit tests, then an end-to-end run against a real
+      # server process. The client plugin's engine calls need the game and are not covered.
+      - name: Test
+        run: ctest --test-dir build/ninja-release --output-on-failure
+
       - name: Upload client
         uses: actions/upload-artifact@v4
         with:

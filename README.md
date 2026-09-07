@@ -90,6 +90,7 @@ state; an *orbit* bot walks a circle around them, which is the quickest way to j
 client/     F4SE plugin sources and default F4MP.ini
 server/     dedicated server sources and default server.ini
 shared/     protocol headers shared by client and server
+tests/      headless protocol tests and an end-to-end server test
 lib/        CommonLibF4 (git submodule)
 docs/       architecture and protocol notes
 ```

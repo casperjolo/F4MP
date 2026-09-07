@@ -50,30 +50,30 @@ namespace f4mp
 			return it == _values.end() ? std::string(fallback) : it->second;
 		}
 
+		// Numbers must be the whole value: "Port=270I5" falls back rather than silently
+		// becoming 270. A trailing "; comment" is allowed, since a number never contains one.
 		[[nodiscard]] long long GetInt(std::string_view section, std::string_view key, long long fallback) const
 		{
-			const auto s = Get(section, key);
+			const auto raw = Get(section, key); // owns the storage `s` points into
+			const auto s = Numeric(raw);
 			long long v{};
 			const auto res = std::from_chars(s.data(), s.data() + s.size(), v);
-			return res.ec == std::errc{} ? v : fallback;
+			return res.ec == std::errc{} && res.ptr == s.data() + s.size() ? v : fallback;
 		}
 
 		[[nodiscard]] double GetFloat(std::string_view section, std::string_view key, double fallback) const
 		{
-			const auto s = Get(section, key);
-			if (s.empty()) {
-				return fallback;
-			}
-			try {
-				return std::stod(s);
-			} catch (...) {
-				return fallback;
-			}
+			const auto raw = Get(section, key);
+			const auto s = Numeric(raw);
+			double v{};
+			const auto res = std::from_chars(s.data(), s.data() + s.size(), v);
+			return res.ec == std::errc{} && res.ptr == s.data() + s.size() ? v : fallback;
 		}
 
 		[[nodiscard]] bool GetBool(std::string_view section, std::string_view key, bool fallback) const
 		{
-			const auto s = Lower(Get(section, key));
+			const auto raw = Get(section, key);
+			const auto s = Lower(Numeric(raw));
 			if (s == "1" || s == "true" || s == "yes" || s == "on") {
 				return true;
 			}
@@ -84,6 +84,17 @@ namespace f4mp
 		}
 
 	private:
+		// A value about to be parsed as a number or a boolean: drop any inline comment and the
+		// space around what is left. Never used for plain string values, which may contain ';'.
+		static std::string_view Numeric(std::string_view s)
+		{
+			const auto comment = s.find_first_of(";#");
+			if (comment != std::string_view::npos) {
+				s = s.substr(0, comment);
+			}
+			return Trim(s);
+		}
+
 		static std::string_view Trim(std::string_view s)
 		{
 			while (!s.empty() && std::isspace(static_cast<unsigned char>(s.front()))) {

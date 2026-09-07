@@ -2,22 +2,16 @@
 
 #include "Game/GameUtil.hpp"
 
-#include <deque>
+#include "f4mp/Interp.hpp"
 
 namespace f4mp::client
 {
-	struct Snapshot
-	{
-		PlayerState state{};
-		std::uint32_t serverMs{ 0 }; // server clock when the server relayed it
-	};
-
 	struct RemotePlayer
 	{
 		PlayerId id{ INVALID_PLAYER_ID };
 		std::string name;
 
-		std::deque<Snapshot> snapshots; // oldest first, bounded
+		std::vector<TimedState> snapshots; // oldest first, bounded
 
 		// Per-player copy of the player NPC (only with the duplicate experiment). Dynamic form:
 		// it dies with the loaded game, see ForgetActors().
@@ -94,11 +88,9 @@ namespace f4mp::client
 		using Clock = std::chrono::steady_clock;
 
 		void UpdateOne(RemotePlayer& a_player, const game::Space& a_localSpace, Clock::time_point a_now, double a_renderMs);
-		// Position / yaw / flags of a_player at server time a_renderMs (interpolated, lightly extrapolated).
-		static PlayerState Sample(const RemotePlayer& a_player, double a_renderMs);
 
 		[[nodiscard]] static double LocalMs() noexcept;
-		void NoteServerTime(std::uint32_t a_serverMs);
+		void NoteServerTime(std::int64_t a_serverMs);
 
 		std::unordered_map<PlayerId, RemotePlayer> _players;
 		float _interpDelayMs{ 100.0f };
@@ -112,5 +104,6 @@ namespace f4mp::client
 		// localMs - serverMs, min-filtered so it tracks the fastest packets (transit + clock skew).
 		bool _hasOffset{ false };
 		double _offsetMs{ 0.0 };
+		ServerClock _serverClock; // u32 wire stamps -> monotonic timeline
 	};
 }

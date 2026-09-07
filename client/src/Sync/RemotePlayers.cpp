@@ -9,37 +9,6 @@ namespace f4mp::client
 		constexpr auto SPAWN_RETRY_INTERVAL = std::chrono::seconds(1);
 		constexpr std::size_t MAX_SNAPSHOTS = 64;
 		constexpr double SNAPSHOT_KEEP_MS = 1500.0;   // history kept behind the render time
-		constexpr double MAX_EXTRAPOLATE_MS = 150.0;  // beyond the newest snapshot
-		constexpr double MAX_VELOCITY_GAP_MS = 400.0; // pairs further apart carry no useful velocity
-
-		float Lerp(float a_a, float a_b, float a_t) noexcept
-		{
-			return a_a + (a_b - a_a) * a_t;
-		}
-
-		// Interpolates along the shortest arc so yaw does not spin through 360 degrees.
-		float LerpAngle(float a_a, float a_b, float a_t) noexcept
-		{
-			constexpr auto twoPi = 2.0f * std::numbers::pi_v<float>;
-			auto delta = std::fmod(a_b - a_a, twoPi);
-			if (delta > std::numbers::pi_v<float>) {
-				delta -= twoPi;
-			} else if (delta < -std::numbers::pi_v<float>) {
-				delta += twoPi;
-			}
-			return a_a + delta * a_t;
-		}
-
-		PlayerState Blend(const PlayerState& a_a, const PlayerState& a_b, float a_t)
-		{
-			PlayerState out = a_t < 0.5f ? a_a : a_b; // discrete fields follow the nearer snapshot
-			out.position.x = Lerp(a_a.position.x, a_b.position.x, a_t);
-			out.position.y = Lerp(a_a.position.y, a_b.position.y, a_t);
-			out.position.z = Lerp(a_a.position.z, a_b.position.z, a_t);
-			out.yaw = LerpAngle(a_a.yaw, a_b.yaw, a_t);
-			out.health = Lerp(a_a.health, a_b.health, a_t);
-			return out;
-		}
 	}
 
 	// ---- bookkeeping --------------------------------------------------------------
@@ -89,16 +58,17 @@ namespace f4mp::client
 			it = _players.find(a_id);
 		}
 
-		NoteServerTime(a_serverMs);
+		const auto timeMs = _serverClock.Unwrap(a_serverMs);
+		NoteServerTime(timeMs);
 
 		auto& snapshots = it->second.snapshots;
 		// Sequenced channel: a stale packet is dropped by ENet, but be safe about ordering.
-		if (!snapshots.empty() && static_cast<std::int32_t>(a_serverMs - snapshots.back().serverMs) < 0) {
+		if (!snapshots.empty() && timeMs <= snapshots.back().timeMs) {
 			return;
 		}
-		snapshots.push_back(Snapshot{ a_state, a_serverMs });
-		while (snapshots.size() > MAX_SNAPSHOTS) {
-			snapshots.pop_front();
+		snapshots.push_back(TimedState{ a_state, timeMs });
+		if (snapshots.size() > MAX_SNAPSHOTS) {
+			snapshots.erase(snapshots.begin(), snapshots.begin() + (snapshots.size() - MAX_SNAPSHOTS));
 		}
 	}
 
@@ -109,7 +79,7 @@ namespace f4mp::client
 		return std::chrono::duration<double, std::milli>(Clock::now().time_since_epoch()).count();
 	}
 
-	void RemotePlayers::NoteServerTime(std::uint32_t a_serverMs)
+	void RemotePlayers::NoteServerTime(std::int64_t a_serverMs)
 	{
 		const double sample = LocalMs() - static_cast<double>(a_serverMs);
 		if (!_hasOffset) {
@@ -140,44 +110,6 @@ namespace f4mp::client
 		}
 	}
 
-	PlayerState RemotePlayers::Sample(const RemotePlayer& a_player, double a_renderMs)
-	{
-		const auto& s = a_player.snapshots;
-		if (s.size() == 1 || a_renderMs <= static_cast<double>(s.front().serverMs)) {
-			return s.front().state;
-		}
-
-		const auto& last = s.back();
-		if (a_renderMs >= static_cast<double>(last.serverMs)) {
-			// Past the newest snapshot: extrapolate a little from the last pair, then hold.
-			const auto& prev = s[s.size() - 2];
-			const double gap = static_cast<double>(last.serverMs - prev.serverMs);
-			const double ahead = std::min(a_renderMs - static_cast<double>(last.serverMs), MAX_EXTRAPOLATE_MS);
-			if (gap <= 0.0 || gap > MAX_VELOCITY_GAP_MS || ahead <= 0.0) {
-				return last.state;
-			}
-			const float t = static_cast<float>(ahead / gap);
-			PlayerState out = last.state;
-			out.position.x += (last.state.position.x - prev.state.position.x) * t;
-			out.position.y += (last.state.position.y - prev.state.position.y) * t;
-			out.position.z += (last.state.position.z - prev.state.position.z) * t;
-			return out;
-		}
-
-		// Find the pair bracketing the render time.
-		for (std::size_t i = 0; i + 1 < s.size(); ++i) {
-			const auto& a = s[i];
-			const auto& b = s[i + 1];
-			if (a_renderMs < static_cast<double>(a.serverMs) || a_renderMs > static_cast<double>(b.serverMs)) {
-				continue;
-			}
-			const double span = static_cast<double>(b.serverMs - a.serverMs);
-			const float t = span > 0.0 ? static_cast<float>((a_renderMs - static_cast<double>(a.serverMs)) / span) : 1.0f;
-			return Blend(a.state, b.state, std::clamp(t, 0.0f, 1.0f));
-		}
-		return last.state;
-	}
-
 	void RemotePlayers::UpdateOne(RemotePlayer& a_player, const game::Space& a_localSpace, Clock::time_point a_now, double a_renderMs)
 	{
 		if (!a_player.HasState()) {
@@ -186,8 +118,12 @@ namespace f4mp::client
 
 		// Forget history well behind the render time (keep two so velocity is still available).
 		auto& snapshots = a_player.snapshots;
-		while (snapshots.size() > 2 && static_cast<double>(snapshots[1].serverMs) + SNAPSHOT_KEEP_MS < a_renderMs) {
-			snapshots.pop_front();
+		std::size_t drop = 0;
+		while (snapshots.size() - drop > 2 && static_cast<double>(snapshots[drop + 1].timeMs) + SNAPSHOT_KEEP_MS < a_renderMs) {
+			++drop;
+		}
+		if (drop > 0) {
+			snapshots.erase(snapshots.begin(), snapshots.begin() + drop);
 		}
 
 		const auto& latest = a_player.Latest();
@@ -270,7 +206,7 @@ namespace f4mp::client
 			return; // experiment: leave the actor entirely to the engine
 		}
 
-		const auto sample = Sample(a_player, a_renderMs);
+		const auto sample = SampleAt(std::span<const TimedState>(a_player.snapshots), a_renderMs);
 		const auto position = game::ToNi(sample.position);
 		const float frameDt = a_player.hasLastRender ? std::chrono::duration<float>(a_now - a_player.lastRenderTime).count() : 0.0f;
 		if (_move && frameDt > 0.0f) {
@@ -383,6 +319,7 @@ namespace f4mp::client
 		DespawnAll();
 		_players.clear();
 		_hasOffset = false;
+		_serverClock.Reset();
 	}
 
 	const RemotePlayer* RemotePlayers::Find(PlayerId a_id) const
