@@ -2,6 +2,8 @@
 
 #include "Game/GameUtil.hpp"
 
+#include <format>
+
 namespace f4mp::client::game
 {
 	namespace
@@ -269,35 +271,118 @@ namespace f4mp::client::game
 		return value;
 	}
 
+	std::string GraphValue::Describe() const
+	{
+		if (!Exists()) {
+			return "-";
+		}
+		std::string out;
+		if (asFloat) {
+			out += std::format("f={:.2f}", f);
+		}
+		if (asInt) {
+			out += (out.empty() ? "" : " ") + std::format("i={}", i);
+		}
+		if (asBool) {
+			out += (out.empty() ? "" : " ") + std::format("b={}", b);
+		}
+		return out;
+	}
+
+	GraphValue ReadGraphValue(RE::Actor* a_actor, const char* a_variable)
+	{
+		GraphValue value;
+		if (!a_actor) {
+			return value;
+		}
+		const RE::BSFixedString name(a_variable);
+		value.asFloat = a_actor->GetGraphVariableImplFloat(name, value.f);
+		value.asInt = a_actor->GetGraphVariableImplInt(name, value.i);
+		value.asBool = a_actor->GetGraphVariableImplBool(name, value.b);
+		return value;
+	}
+
+	std::span<const char* const> GraphVariableCandidates()
+	{
+		// Names seen in Bethesda behaviour graphs plus the ones FO4_Wrld drives. Probing is a
+		// hash lookup each, so a wide net costs nothing.
+		static const char* const NAMES[] = {
+			// locomotion
+			"Speed", "SpeedSampled", "SpeedDamped", "fSpeed", "MoveSpeed", "fMoveSpeed",
+			"Direction", "DirectionSampled", "DirectionDamped", "TurnDelta", "fTurnDelta",
+			"LocomotionSpeed", "fLocomotionSpeed", "SpeedTarget", "DesiredSpeed",
+			// movement state
+			"IsRunning", "IsSprinting", "IsWalking", "IsMoving", "bIsMoving", "bIsSynced",
+			"iState", "iSyncTurnState", "iSyncIdleLocomotion", "bMotionDriven", "bAnimationDriven",
+			// posture / actions
+			"iIsInSneak", "IsBlocking", "IsAttacking", "bAimActive", "IsDead", "bEquipOk",
+			"bInJumpState", "fFallTime", "bIsStaggering", "IsCasting", "iLeftHandType",
+			"iRightHandType", "bWantsToSprint", "bIsCrouching"
+		};
+		return { NAMES };
+	}
+
 	void SetLocomotion(RE::Actor* a_actor, float a_speed, bool a_sprinting, bool a_first)
 	{
 		if (!a_actor) {
 			return;
 		}
 
-		// Interned once; the string pool is alive whenever this runs.
-		static const RE::BSFixedString SPEED_SAMPLED("SpeedSampled");
-		static const RE::BSFixedString DIRECTION("Direction");
-		static const RE::BSFixedString ANIMATION_DRIVEN("bAnimationDriven");
-		static const RE::BSFixedString IS_RUNNING("IsRunning");
-		static const RE::BSFixedString IS_SPRINTING("IsSprinting");
+		// Which variable carries locomotion speed differs between behaviour graphs, and writing
+		// to a name the graph does not have is a silent no-op ("SpeedSampled" reads back as
+		// missing on a clone, while "Direction" reads back fine). So write to every candidate
+		// the graph actually has, and say in the log which ones those were.
+		static const char* const SPEED_NAMES[] = { "SpeedSampled", "Speed", "SpeedDamped", "fSpeed", "MoveSpeed" };
+		static const char* const RUN_NAMES[] = { "IsRunning", "bIsRunning" };
+		static const char* const SPRINT_NAMES[] = { "IsSprinting", "bIsSprinting" };
 
-		constexpr float STOP_SPEED = 8.0f;   // below this the clone is standing (units/s)
-		constexpr float RUN_SPEED = 260.0f;  // walk/run split; walking is ~110-160, running ~350+
+		constexpr float STOP_SPEED = 8.0f;  // below this the clone is standing (units/s)
+		constexpr float RUN_SPEED = 260.0f; // walk/run split; walking is ~110-160, running ~350+
 		constexpr float MAX_SPEED = 900.0f;
-
-		if (a_first) {
-			a_actor->SetGraphVariableBool(ANIMATION_DRIVEN, false);
-		}
 
 		float speed = std::clamp(a_speed, 0.0f, MAX_SPEED);
 		if (speed < STOP_SPEED) {
 			speed = 0.0f;
 		}
-		a_actor->SetGraphVariableFloat(SPEED_SAMPLED, speed);
-		a_actor->SetGraphVariableFloat(DIRECTION, 0.0f); // facing the way it moves
-		a_actor->SetGraphVariableBool(IS_RUNNING, speed >= RUN_SPEED);
-		a_actor->SetGraphVariableBool(IS_SPRINTING, a_sprinting && speed > 0.0f);
+
+		std::string wrote;
+		const auto writeFloat = [&](const char* a_name, float a_value) {
+			if (!ReadGraphValue(a_actor, a_name).asFloat) {
+				return;
+			}
+			if (a_actor->SetGraphVariableFloat(RE::BSFixedString(a_name), a_value) && a_first) {
+				wrote += (wrote.empty() ? "" : ", ") + std::string(a_name);
+			}
+		};
+		const auto writeBool = [&](const char* a_name, bool a_value) {
+			if (!ReadGraphValue(a_actor, a_name).asBool) {
+				return;
+			}
+			if (a_actor->SetGraphVariableBool(RE::BSFixedString(a_name), a_value) && a_first) {
+				wrote += (wrote.empty() ? "" : ", ") + std::string(a_name);
+			}
+		};
+
+		if (a_first) {
+			// Root motion off, so a clip plays without shoving the actor away from our position.
+			writeBool("bAnimationDriven", false);
+			writeBool("bMotionDriven", false);
+		}
+
+		for (const auto* name : SPEED_NAMES) {
+			writeFloat(name, speed);
+		}
+		writeFloat("Direction", 0.0f); // moving the way it faces
+		for (const auto* name : RUN_NAMES) {
+			writeBool(name, speed >= RUN_SPEED);
+		}
+		for (const auto* name : SPRINT_NAMES) {
+			writeBool(name, a_sprinting && speed > 0.0f);
+		}
+
+		if (a_first) {
+			REX::LogInformation("Locomotion on 0x{:08X}: wrote [{}]"sv, a_actor->GetFormID(), wrote.empty() ? "nothing" : wrote);
+		}
 	}
 
 	void Despawn(RE::ObjectRefHandle& a_handle)

@@ -365,6 +365,51 @@ namespace f4mp::client
 		}
 	}
 
+	void Session::PrintGraph(std::span<const std::string> a_names) const
+	{
+		auto* local = game::GetPlayer();
+
+		// The first clone that actually exists, so there is something to compare against.
+		RE::Actor* clone = nullptr;
+		std::string cloneName;
+		for (const auto& [id, player] : _remotes.All()) {
+			if (auto ref = player.actor.get()) {
+				if (auto* actor = ref->As<RE::Actor>()) {
+					clone = actor;
+					cloneName = player.name;
+					break;
+				}
+			}
+		}
+
+		game::ConsolePrint(std::format("[F4MP] graph variables: you{}",
+			clone ? std::format(" vs clone \"{}\"", cloneName) : " (no clone spawned)"));
+
+		std::vector<const char*> names;
+		std::vector<std::string> owned;
+		if (a_names.empty()) {
+			const auto candidates = game::GraphVariableCandidates();
+			names.assign(candidates.begin(), candidates.end());
+		} else {
+			owned.assign(a_names.begin(), a_names.end());
+			for (const auto& name : owned) {
+				names.push_back(name.c_str());
+			}
+		}
+
+		int found = 0;
+		for (const auto* name : names) {
+			const auto mine = game::ReadGraphValue(local, name);
+			const auto theirs = game::ReadGraphValue(clone, name);
+			if (!mine.Exists() && !theirs.Exists()) {
+				continue; // not in either behaviour graph: wrong name
+			}
+			++found;
+			game::ConsolePrint(std::format("  {:<22} you [{}]  clone [{}]", name, mine.Describe(), theirs.Describe()));
+		}
+		game::ConsolePrint(std::format("  {} of {} name(s) exist in a behaviour graph", found, names.size()));
+	}
+
 	void Session::PrintStatus() const
 	{
 		std::string line = "[F4MP] ";

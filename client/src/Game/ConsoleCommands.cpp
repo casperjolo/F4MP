@@ -101,6 +101,7 @@ namespace f4mp::client::console
 			game::ConsolePrint("  f4mp name <name>             change your name");
 			game::ConsolePrint("  f4mp unstick                 restore controls, HUD and camera after a menu froze you");
 			game::ConsolePrint("  f4mp debug                   engine facts about every clone (3D, alpha, base record)");
+			game::ConsolePrint("  f4mp graph [names...]        animation variables, you vs a clone; run it while moving");
 			game::ConsolePrint("  f4mp clonebase <hex id>      NPC record to copy clones from (default 7), respawns them");
 			game::ConsolePrint("  f4mp sync|pacify|ghost|duplicate|move on|off   clone experiments; f4mp respawn recreates them");
 		}
@@ -192,6 +193,17 @@ namespace f4mp::client::console
 			game::ConsolePrint("[F4MP] Controls, HUD and camera restored.");
 		} else if (IEquals(cmd, "debug")) {
 			session.PrintDebug();
+		} else if (IEquals(cmd, "graph")) {
+			std::vector<std::string> names;
+			auto remaining = rest;
+			while (!remaining.empty()) {
+				const auto token = NextToken(remaining);
+				if (token.empty()) {
+					break;
+				}
+				names.emplace_back(token);
+			}
+			session.PrintGraph(names);
 		} else if (IEquals(cmd, "sync") || IEquals(cmd, "pacify") || IEquals(cmd, "ghost") || IEquals(cmd, "duplicate") || IEquals(cmd, "move") || IEquals(cmd, "respawn")) {
 			auto value = rest;
 			const auto word = NextToken(value);

@@ -70,6 +70,26 @@ namespace f4mp::client::game
 	[[nodiscard]] float ReadGraphFloat(RE::Actor* a_actor, const char* a_variable);
 	[[nodiscard]] bool ReadGraphBool(RE::Actor* a_actor, const char* a_variable);
 
+	// One animation-graph variable as the engine reports it. A variable that does not exist in
+	// the actor's behaviour graph reads as nothing at all, which is how a wrong name is spotted.
+	struct GraphValue
+	{
+		bool asFloat{ false };
+		float f{ 0.0f };
+		bool asInt{ false };
+		std::int32_t i{ 0 };
+		bool asBool{ false };
+		bool b{ false };
+
+		[[nodiscard]] bool Exists() const noexcept { return asFloat || asInt || asBool; }
+		[[nodiscard]] std::string Describe() const;
+	};
+
+	[[nodiscard]] GraphValue ReadGraphValue(RE::Actor* a_actor, const char* a_variable);
+
+	// Names worth probing when hunting for the one that carries locomotion.
+	[[nodiscard]] std::span<const char* const> GraphVariableCandidates();
+
 	// Feeds the animation graph the locomotion it would normally derive from its own movement:
 	// SpeedSampled / Direction / IsRunning / IsSprinting, with animation-driven root motion off
 	// (a_first) so clips play without displacing the actor. Names verified by FO4_Wrld.

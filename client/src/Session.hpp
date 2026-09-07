@@ -44,6 +44,9 @@ namespace f4mp::client
 		void PrintPlayers() const;
 		// Engine-level facts about every clone (3D loaded, hidden, alpha, ghost, base record...).
 		void PrintDebug() const;
+		// Animation-graph variables on the local player and on a clone, side by side. With no
+		// names given it probes a built-in candidate list. Run it while moving.
+		void PrintGraph(std::span<const std::string> a_names) const;
 
 		[[nodiscard]] bool IsConnected() const noexcept { return _net.IsConnected() && _welcomed; }
 
